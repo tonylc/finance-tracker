@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Finance Tracker — Tests</title>
+<style>
+  body { font-family: -apple-system, sans-serif; font-size: 13px; margin: 0; background: #f5f5f5; }
+  header { background: #1a1a2e; color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 16px; font-weight: 700; }
+  #summary { padding: 10px 24px; background: #fff; border-bottom: 1px solid #ddd; font-size: 13px; }
+  #summary .pass { color: #2e7d32; font-weight: 700; }
+  #summary .fail { color: #b71c1c; font-weight: 700; }
+  main { max-width: 860px; margin: 20px auto; padding: 0 16px; }
+  .suite { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .suite-header { background: #1a1a2e; color: #fff; padding: 10px 16px; font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; }
+  .suite-header .badge { font-size: 11px; background: rgba(255,255,255,.15); border-radius: 10px; padding: 2px 10px; }
+  .test { padding: 8px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: flex-start; gap: 10px; }
+  .test:last-child { border-bottom: none; }
+  .icon { font-size: 14px; line-height: 1.4; flex-shrink: 0; }
+  .test-name { flex: 1; }
+  .test-err { font-size: 11px; color: #b71c1c; margin-top: 3px; font-family: 'Courier New', monospace; white-space: pre-wrap; }
+  .pass-bg { background: #f9fff9; }
+  .fail-bg { background: #fff5f5; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Finance Tracker — Unit Tests</h1>
+  <span id="header-status" style="font-size:13px;"></span>
+</header>
+<div id="summary">Loading tests…</div>
+<main id="main"></main>
+
+<!-- Load the app in an iframe just to grab the exported lib -->
+<iframe id="app-frame" src="index.html" style="display:none;" onload="runTests()"></iframe>
+
+<script>
+// ── Test runner ─────────────────────────────────────────────────────────────
+const results = [];
+let currentSuite = null;
+
+function suite(name, fn) {
+  currentSuite = { name, tests: [] };
+  results.push(currentSuite);
+  fn();
+}
+
+function test(name, fn) {
+  try {
+    fn();
+    currentSuite.tests.push({ name, pass: true });
+  } catch (e) {
+    currentSuite.tests.push({ name, pass: false, err: e.message });
+  }
+}
+
+function assert(condition, msg) {
+  if (!condition) throw new Error(msg || 'Assertion failed');
+}
+
+function assertEqual(a, b) {
+  const as = JSON.stringify(a), bs = JSON.stringify(b);
+  if (as !== bs) throw new Error(`Expected ${bs}\n  Got     ${as}`);
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+function runTests() {
+  const lib = document.getElementById('app-frame').contentWindow.__financeLib;
+  if (!lib) {
+    document.getElementById('summary').textContent = 'ERROR: Could not load app lib. Make sure index.html is served from the same directory.';
+    return;
+  }
+  const {
+    parseCSV, formatAccountKey, validateImport, buildHeaderMap,
+    parseTransaction, deduplicateTransactions, filterByMonth,
+    aggregateByCategory, totalSpend, cycleCategoryByKey,
+    validateExport, toCSV, ALL_SUBS, VALID_CATS,
+  } = lib;
+
+  // ── parseCSV ──────────────────────────────────────────────────────────────
+  suite('parseCSV', () => {
+    test('returns empty array for blank input', () => {
+      assertEqual(parseCSV(''), []);
+      assertEqual(parseCSV('   '), []);
+      assertEqual(parseCSV(null), []);
+    });
+
+    test('parses simple CSV', () => {
+      const rows = parseCSV('a,b,c\n1,2,3');
+      assertEqual(rows.length, 2);
+      assertEqual(rows[0], ['a', 'b', 'c']);
+      assertEqual(rows[1], ['1', '2', '3']);
+    });
+
+    test('handles quoted fields with embedded commas', () => {
+      const rows = parseCSV('"hello, world",foo,bar');
+      assertEqual(rows[0][0], 'hello, world');
+      assertEqual(rows[0][1], 'foo');
+    });
+
+    test('handles Windows CRLF line endings', () => {
+      const rows = parseCSV('a,b\r\n1,2\r\n3,4');
+      assertEqual(rows.length, 3);
+    });
+
+    test('strips BOM', () => {
+      const rows = parseCSV('\uFEFFDate,Desc\n2025-01-01,Foo');
+      assertEqual(rows[0][0], 'Date');
+    });
+
+    test('handles escaped quotes inside quoted fields', () => {
+      const rows = parseCSV('"say ""hello""",world');
+      assertEqual(rows[0][0], 'say "hello"');
+    });
+
+    test('skips blank lines', () => {
+      const rows = parseCSV('a,b\n\n1,2\n\n');
+      assertEqual(rows.length, 2);
+    });
+  });
+
+  // ── formatAccountKey ──────────────────────────────────────────────────────
+  suite('formatAccountKey', () => {
+    test('basic format', () => {
+      assertEqual(formatAccountKey('Chase', '7515'), 'Chase *7515');
+    });
+
+    test('account with parentheses', () => {
+      assertEqual(formatAccountKey('Citi (tony)', '1003'), 'Citi (tony) *1003');
+    });
+
+    test('trims whitespace', () => {
+      assertEqual(formatAccountKey('  BofA  ', '  1884  '), 'BofA *1884');
+    });
+  });
+
+  // ── buildHeaderMap ────────────────────────────────────────────────────────
+  suite('buildHeaderMap', () => {
+    test('maps standard headers case-insensitively', () => {
+      const m = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
+      assertEqual(m.date, 0);
+      assertEqual(m.description, 1);
+      assertEqual(m.amount, 2);
+      assertEqual(m.category, 3);
+      assertEqual(m.fix, 4);
+    });
+
+    test('returns error if required column missing', () => {
+      const m = buildHeaderMap(['Date', 'Amount']); // missing Description
+      assert(m.error, 'should return error');
+      assert(m.error.includes('Description'), 'error mentions missing column');
+    });
+
+    test('category and fix default to -1 when absent', () => {
+      const m = buildHeaderMap(['Date', 'Description', 'Amount']);
+      assertEqual(m.category, -1);
+      assertEqual(m.fix, -1);
+    });
+  });
+
+  // ── validateImport ────────────────────────────────────────────────────────
+  suite('validateImport', () => {
+    const hdr = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
+
+    test('passes when all categories are valid', () => {
+      const rows = [['2025-01-01', 'Test', '-10', 'Groceries', 'false']];
+      const r = validateImport(rows, hdr);
+      assert(r.valid);
+      assertEqual(r.errors.length, 0);
+    });
+
+    test('passes when category is empty', () => {
+      const rows = [['2025-01-01', 'Test', '-10', '', 'false']];
+      const r = validateImport(rows, hdr);
+      assert(r.valid);
+    });
+
+    test('fails with row number when category is invalid', () => {
+      const rows = [
+        ['2025-01-01', 'Test', '-10', 'InvalidCat', 'false'],
+        ['2025-01-02', 'Test2', '-5', 'Groceries', 'false'],
+        ['2025-01-03', 'Test3', '-8', 'BadCategory', 'false'],
+      ];
+      const r = validateImport(rows, hdr);
+      assert(!r.valid);
+      assertEqual(r.errors.length, 2);
+      assert(r.errors[0].includes('Row 2'), 'mentions row 2');
+      assert(r.errors[1].includes('Row 4'), 'mentions row 4');
+    });
+
+    test('error message includes the bad category value', () => {
+      const rows = [['2025-01-01', 'Test', '-10', 'NOPE', 'false']];
+      const r = validateImport(rows, hdr);
+      assert(r.errors[0].includes('NOPE'));
+    });
+  });
+
+  // ── parseTransaction ──────────────────────────────────────────────────────
+  suite('parseTransaction', () => {
+    const hdr = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
+
+    test('maps fields correctly', () => {
+      const t = parseTransaction(['2025-03-15', 'Starbucks', '-4.75', 'Coffee / Bakery', 'false'], hdr, 'Chase *7515');
+      assertEqual(t.date, '2025-03-15');
+      assertEqual(t.description, 'Starbucks');
+      assertEqual(t.amount, -4.75);
+      assertEqual(t.category, 'Coffee / Bakery');
+      assertEqual(t.fix, false);
+      assertEqual(t.accountKey, 'Chase *7515');
+      assert(t.id, 'has id');
+    });
+
+    test('fix defaults to false when empty', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.fix, false);
+    });
+
+    test('fix is true for "true" string', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', 'true'], hdr, 'Chase *7515');
+      assertEqual(t.fix, true);
+    });
+
+    test('strips dollar signs from amount', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '$1,234.56', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.amount, 1234.56);
+    });
+
+    test('empty category stored as empty string', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.category, '');
+    });
+  });
+
+  // ── deduplicateTransactions ───────────────────────────────────────────────
+  suite('deduplicateTransactions', () => {
+    const base = [{ accountKey: 'Chase *7515', date: '2025-01-01', description: 'Foo', amount: -10, id: '1', category: '', fix: false }];
+
+    test('adds new unique transaction', () => {
+      const result = deduplicateTransactions(base, [{ accountKey: 'Chase *7515', date: '2025-01-02', description: 'Bar', amount: -5, id: '2', category: '', fix: false }]);
+      assertEqual(result.length, 2);
+    });
+
+    test('does not add exact duplicate', () => {
+      const dup = [{ accountKey: 'Chase *7515', date: '2025-01-01', description: 'Foo', amount: -10, id: '99', category: '', fix: false }];
+      const result = deduplicateTransactions(base, dup);
+      assertEqual(result.length, 1);
+    });
+
+    test('preserves original order', () => {
+      const result = deduplicateTransactions(base, [{ accountKey: 'X *0000', date: '2025-01-03', description: 'Z', amount: -1, id: '3', category: '', fix: false }]);
+      assertEqual(result[0].id, '1');
+      assertEqual(result[1].accountKey, 'X *0000');
+    });
+  });
+
+  // ── filterByMonth ─────────────────────────────────────────────────────────
+  suite('filterByMonth', () => {
+    const txs = [
+      { date: '2025-01-01', category: 'Groceries', amount: -10 },
+      { date: '2025-01-31', category: 'Groceries', amount: -20 },
+      { date: '2025-02-01', category: 'Groceries', amount: -30 },
+      { date: '2025-12-15', category: 'Groceries', amount: -5 },
+    ];
+
+    test('includes both boundary dates of a month', () => {
+      const r = filterByMonth(txs, 2025, 0); // January (month 0)
+      assertEqual(r.length, 2);
+    });
+
+    test('excludes other months', () => {
+      const r = filterByMonth(txs, 2025, 1); // February
+      assertEqual(r.length, 1);
+      assertEqual(r[0].amount, -30);
+    });
+
+    test('returns empty for month with no transactions', () => {
+      const r = filterByMonth(txs, 2025, 5); // June
+      assertEqual(r.length, 0);
+    });
+  });
+
+  // ── aggregateByCategory ───────────────────────────────────────────────────
+  suite('aggregateByCategory', () => {
+    const txs = [
+      { category: 'Groceries', amount: -50 },
+      { category: 'Groceries', amount: -30 },
+      { category: 'Restaurants', amount: -25 },
+      { category: 'Gas / EV Charging', amount: -40 },
+      { category: '', amount: -99 }, // uncategorized, should be excluded
+    ];
+
+    test('groups by parent and sub correctly', () => {
+      const { groups } = aggregateByCategory(txs);
+      assert(groups['Food'], 'Food group exists');
+      assert(groups['Automotive'], 'Automotive group exists');
+      assertEqual(groups['Food']['Groceries'].total, -80);
+      assertEqual(groups['Food']['Groceries'].count, 2);
+      assertEqual(groups['Food']['Restaurants'].total, -25);
+    });
+
+    test('computes grand total excluding uncategorized', () => {
+      const { grandTotal } = aggregateByCategory(txs);
+      assertEqual(grandTotal, -145);
+    });
+
+    test('omits subcategories with no transactions', () => {
+      const { groups } = aggregateByCategory(txs);
+      assert(!groups['Food']['Coffee / Bakery'], 'Coffee not present');
+    });
+  });
+
+  // ── totalSpend ────────────────────────────────────────────────────────────
+  suite('totalSpend', () => {
+    test('sums all amounts', () => {
+      const txs = [{ amount: -10 }, { amount: -20 }, { amount: 5 }];
+      assertEqual(totalSpend(txs), -25);
+    });
+
+    test('returns 0 for empty list', () => {
+      assertEqual(totalSpend([]), 0);
+    });
+  });
+
+  // ── cycleCategoryByKey ────────────────────────────────────────────────────
+  suite('cycleCategoryByKey', () => {
+    test("'g' key cycles Gas → Groceries → General Merchandise → wraps", () => {
+      const r1 = cycleCategoryByKey('', 'g', ALL_SUBS);
+      assertEqual(r1, 'Gas / EV Charging');
+      const r2 = cycleCategoryByKey('Gas / EV Charging', 'g', ALL_SUBS);
+      assertEqual(r2, 'Groceries');
+      const r3 = cycleCategoryByKey('Groceries', 'g', ALL_SUBS);
+      assertEqual(r3, 'General Merchandise');
+      const r4 = cycleCategoryByKey('General Merchandise', 'g', ALL_SUBS);
+      assertEqual(r4, 'Gas / EV Charging');
+    });
+
+    test("'r' key cycles to Restaurants", () => {
+      const r = cycleCategoryByKey('', 'r', ALL_SUBS);
+      assertEqual(r, 'Restaurants');
+    });
+
+    test("unknown key returns current value unchanged", () => {
+      const r = cycleCategoryByKey('Groceries', 'z', ALL_SUBS);
+      assertEqual(r, 'Groceries');
+    });
+
+    test("case-insensitive key match", () => {
+      const lower = cycleCategoryByKey('', 'g', ALL_SUBS);
+      const upper = cycleCategoryByKey('', 'G', ALL_SUBS);
+      assertEqual(lower, upper);
+    });
+  });
+
+  // ── validateExport ────────────────────────────────────────────────────────
+  suite('validateExport', () => {
+    test('passes when all rows have categories', () => {
+      const rows = [{ category: 'Groceries' }, { category: 'Restaurants' }];
+      const r = validateExport(rows);
+      assert(r.valid);
+      assertEqual(r.invalidRows.length, 0);
+    });
+
+    test('fails and returns indices of rows missing category', () => {
+      const rows = [{ category: 'Groceries' }, { category: '' }, { category: 'Restaurants' }, { category: '' }];
+      const r = validateExport(rows);
+      assert(!r.valid);
+      assertEqual(r.invalidRows, [1, 3]);
+    });
+  });
+
+  // ── toCSV ─────────────────────────────────────────────────────────────────
+  suite('toCSV', () => {
+    test('outputs header row', () => {
+      const csv = toCSV([]);
+      assertEqual(csv, 'Date,Description,Amount,Category,Fix');
+    });
+
+    test('serializes boolean fix as true/false', () => {
+      const csv = toCSV([{ date: '2025-01-01', description: 'Test', amount: -10, category: 'Groceries', fix: true }]);
+      assert(csv.includes('true'), 'fix=true');
+      const csv2 = toCSV([{ date: '2025-01-01', description: 'Test', amount: -10, category: 'Groceries', fix: false }]);
+      assert(csv2.includes('false'), 'fix=false');
+    });
+
+    test('quotes fields with commas', () => {
+      const csv = toCSV([{ date: '2025-01-01', description: 'Foo, Bar', amount: -10, category: 'Groceries', fix: false }]);
+      assert(csv.includes('"Foo, Bar"'), 'quoted description');
+    });
+
+    test('full round-trip: all 5 columns present', () => {
+      const row = { date: '2025-03-15', description: 'Starbucks', amount: -4.75, category: 'Coffee / Bakery', fix: false };
+      const csv = toCSV([row]);
+      const lines = csv.split('\n');
+      assertEqual(lines.length, 2);
+      assert(lines[1].includes('2025-03-15'));
+      assert(lines[1].includes('Starbucks'));
+      assert(lines[1].includes('-4.75'));
+      assert(lines[1].includes('Coffee / Bakery'));
+    });
+  });
+
+  // ── Render results ────────────────────────────────────────────────────────
+  renderResults();
+}
+
+function renderResults() {
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  let totalPass = 0, totalFail = 0;
+
+  results.forEach(suite => {
+    const passCount = suite.tests.filter(t => t.pass).length;
+    const failCount = suite.tests.length - passCount;
+    totalPass += passCount;
+    totalFail += failCount;
+
+    const div = document.createElement('div');
+    div.className = 'suite';
+
+    const header = document.createElement('div');
+    header.className = 'suite-header';
+    header.innerHTML = `<span>${suite.name}</span><span class="badge">${passCount}/${suite.tests.length}</span>`;
+    div.appendChild(header);
+
+    suite.tests.forEach(t => {
+      const row = document.createElement('div');
+      row.className = `test ${t.pass ? 'pass-bg' : 'fail-bg'}`;
+      row.innerHTML = `
+        <span class="icon">${t.pass ? '✅' : '❌'}</span>
+        <div class="test-name">
+          ${t.name}
+          ${t.err ? `<div class="test-err">${t.err}</div>` : ''}
+        </div>
+      `;
+      div.appendChild(row);
+    });
+
+    main.appendChild(div);
+  });
+
+  const summary = document.getElementById('summary');
+  summary.innerHTML = `<span class="pass">✅ ${totalPass} passed</span>&nbsp;&nbsp;<span class="${totalFail ? 'fail' : 'pass'}">${totalFail ? `❌ ${totalFail} failed` : '✅ 0 failed'}</span>&nbsp;&nbsp;— ${totalPass + totalFail} total`;
+
+  document.getElementById('header-status').textContent = totalFail ? `${totalFail} FAILING` : 'All tests pass';
+  document.getElementById('header-status').style.color = totalFail ? '#f88' : '#8f8';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #f5f5f5;
+    color: #222;
+    min-height: 100vh;
+  }
+
+  /* ── Nav ── */
+  header {
+    background: #1a1a2e;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    height: 52px;
+  }
+  header .brand {
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: .5px;
+    white-space: nowrap;
+  }
+  nav { display: flex; gap: 4px; }
+  nav button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #aab;
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .15s;
+  }
+  nav button:hover { color: #fff; border-color: #444; }
+  nav button.active { background: #e8f4fd; color: #1a1a2e; border-color: transparent; font-weight: 600; }
+
+  /* ── Layout ── */
+  main { max-width: 960px; margin: 0 auto; padding: 28px 20px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #1a1a2e; }
+  h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #444; }
+
+  /* ── Cards ── */
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Form elements ── */
+  label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%;
+    border: 1px solid #d0d0d0;
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #222;
+    background: #fff;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, textarea:focus, select:focus {
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 3px rgba(74,144,217,.12);
+  }
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .form-row .field { flex: 1; }
+  .form-row .field-sm { flex: 0 0 120px; }
+
+  textarea { resize: vertical; font-family: 'Courier New', monospace; font-size: 12px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background .15s, opacity .15s;
+  }
+  .btn-primary { background: #1a1a2e; color: #fff; }
+  .btn-primary:hover { background: #2d2d4e; }
+  .btn-success { background: #2e7d32; color: #fff; }
+  .btn-success:hover { background: #388e3c; }
+  .btn-success:disabled { background: #aaa; cursor: not-allowed; opacity: .7; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  /* ── Alerts ── */
+  .alert {
+    border-radius: 5px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .alert-error { background: #fdecea; border: 1px solid #f5c6cb; color: #b71c1c; }
+  .alert-success { background: #e8f5e9; border: 1px solid #c8e6c9; color: #1b5e20; }
+  .alert-warn { background: #fff8e1; border: 1px solid #ffe082; color: #6d4c00; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    background: #f0f0f0;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #555;
+    border-bottom: 2px solid #ddd;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafafa; }
+  tr:hover td { background: #f0f7ff; }
+
+  .td-date { white-space: nowrap; color: #555; font-size: 12px; }
+  .td-desc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td-amount { text-align: right; font-family: 'Courier New', monospace; white-space: nowrap; }
+  .td-amount.neg { color: #c62828; }
+  .td-amount.pos { color: #2e7d32; }
+  .td-cat select { padding: 4px 6px; font-size: 12px; min-width: 180px; }
+  .td-fix { text-align: center; }
+
+  .cat-error select { border-color: #e53935 !important; background: #fff0f0; }
+
+  /* ── Budget view ── */
+  .budget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .month-nav button {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    transition: background .1s;
+  }
+  .month-nav button:hover { background: #f0f0f0; }
+  .month-nav button:disabled { opacity: .3; cursor: not-allowed; }
+  #budget-month-label { font-size: 16px; font-weight: 700; min-width: 120px; text-align: center; }
+
+  .total-banner {
+    background: #1a1a2e;
+    color: #fff;
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .total-banner .stat { display: flex; flex-direction: column; }
+  .total-banner .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #aab; }
+  .total-banner .stat-value { font-size: 22px; font-weight: 700; font-family: 'Courier New', monospace; }
+
+  .budget-table tr.parent-row td {
+    background: #e8eaf6;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #333;
+    border-top: 2px solid #c5cae9;
+  }
+  .budget-table tr.total-row td {
+    background: #1a1a2e;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .budget-table tr.sub-row td:first-child { padding-left: 28px; }
+
+  /* ── Load view summary ── */
+  .accounts-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .account-chip {
+    background: #e8eaf6;
+    border: 1px solid #c5cae9;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #3949ab;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .account-chip span { background: #3949ab; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; }
+
+  /* ── Export area ── */
+  #export-output {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    min-height: 120px;
+    background: #1a1a2e;
+    color: #a8ff78;
+    border: none;
+    border-radius: 6px;
+    padding: 14px;
+  }
+
+  /* ── Misc ── */
+  .empty-state { text-align: center; padding: 40px; color: #999; font-style: italic; }
+  .text-right { text-align: right; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-20 { margin-top: 20px; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .row-error-indicator { color: #e53935; font-weight: 700; font-size: 11px; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">&#x1F4B0; Finance Tracker</div>
+  <nav>
+    <button class="active" data-view="load">Load</button>
+    <button data-view="budget">Budget</button>
+    <button data-view="categorize">Categorize</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ══════════════════ LOAD VIEW ══════════════════ -->
+  <div id="view-load" class="view active">
+    <h2>Load Transactions</h2>
+
+    <div class="card">
+      <h3>Account</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="load-acct-name">Account Name</label>
+          <input type="text" id="load-acct-name" placeholder="e.g. Chase, BofA, Citi (tony)">
+        </div>
+        <div class="field-sm">
+          <label for="load-acct-last4">Last 4 Digits</label>
+          <input type="text" id="load-acct-last4" maxlength="4" placeholder="7515">
+        </div>
+      </div>
+
+      <h3>CSV Data</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:8px;">
+        Columns: <strong>Date, Description, Amount, Category, Fix</strong>. Include header row. Category may be blank (will appear in Categorize view).
+      </p>
+      <textarea id="load-csv" rows="8" placeholder="Paste CSV here..."></textarea>
+
+      <div id="load-errors" style="margin-top:12px;display:none;"></div>
+
+      <div class="mt-16">
+        <button class="btn btn-primary" id="load-import-btn">Import Transactions</button>
+      </div>
+    </div>
+
+    <div class="card" id="load-summary" style="display:none;">
+      <h3>Loaded Accounts</h3>
+      <div class="accounts-list" id="accounts-list"></div>
+      <div class="mt-16">
+        <p style="font-size:12px;color:#555;">Total transactions loaded: <strong id="total-tx-count">0</strong></p>
+        <p style="font-size:12px;color:#c62828;" id="uncategorized-notice" style="display:none;"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ BUDGET VIEW ══════════════════ -->
+  <div id="view-budget" class="view">
+    <h2>Budget</h2>
+
+    <div id="budget-empty" class="card">
+      <div class="empty-state">No transactions loaded. Go to <strong>Load</strong> to import data.</div>
+    </div>
+
+    <div id="budget-content" style="display:none;">
+      <div class="total-banner">
+        <div class="stat">
+          <span class="stat-label">Total Spent (All Time)</span>
+          <span class="stat-value" id="budget-total-all"></span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Transactions</span>
+          <span class="stat-value" id="budget-tx-count"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="budget-header">
+          <div class="month-nav">
+            <button id="budget-prev" title="Previous month">&#8592;</button>
+            <span id="budget-month-label"></span>
+            <button id="budget-next" title="Next month">&#8594;</button>
+          </div>
+          <div style="font-size:12px;color:#777;" id="budget-month-total"></div>
+        </div>
+
+        <div id="budget-warn" style="display:none;"></div>
+
+        <table class="budget-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th style="text-align:right;">Amount</th>
+              <th style="text-align:right;"># Transactions</th>
+            </tr>
+          </thead>
+          <tbody id="budget-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ CATEGORIZE VIEW ══════════════════ -->
+  <div id="view-categorize" class="view">
+    <h2>Categorize Transactions</h2>
+
+    <div class="card">
+      <h3>Import for Categorization</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="cat-acct-name">Account Name</label>
+          <input type="text" id="cat-acct-name" placeholder="e.g. Chase">
+        </div>
+        <div class="field-sm">
+          <label for="cat-acct-last4">Last 4 Digits</label>
+          <input type="text" id="cat-acct-last4" maxlength="4" placeholder="7515">
+        </div>
+      </div>
+      <textarea id="cat-csv" rows="6" placeholder="Paste CSV here (uncategorized transactions)..."></textarea>
+      <div id="cat-import-errors" style="margin-top:10px;display:none;"></div>
+      <div class="mt-16 flex-between">
+        <button class="btn btn-primary" id="cat-import-btn">Load for Review</button>
+        <span style="font-size:12px;color:#777;">Rows without a category will be editable below.</span>
+      </div>
+    </div>
+
+    <div id="cat-review" style="display:none;">
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:14px;">
+          <h3 style="margin:0;">Review &amp; Categorize</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="cat-progress" style="font-size:12px;color:#555;"></span>
+            <button class="btn btn-success" id="cat-export-btn">Export CSV</button>
+          </div>
+        </div>
+
+        <div id="cat-export-error" style="display:none;"></div>
+
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th style="text-align:right;">Amount</th>
+                <th>Category</th>
+                <th style="text-align:center;">Fix</th>
+              </tr>
+            </thead>
+            <tbody id="cat-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" id="cat-export-card" style="display:none;">
+        <div class="flex-between" style="margin-bottom:10px;">
+          <h3 style="margin:0;">Exported CSV</h3>
+          <button class="btn btn-sm btn-primary" id="cat-copy-btn">Copy</button>
+        </div>
+        <textarea id="export-output" rows="12" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CATEGORY DEFINITIONS
+// ══════════════════════════════════════════════════
+const CAT_LIST = [
+  { parent: 'Automotive',        subs: ['Gas / EV Charging', 'Service / Parts'] },
+  { parent: 'Food',              subs: ['Coffee / Bakery', 'Groceries', 'Restaurants'] },
+  { parent: 'Shopping',          subs: ['Clothing / Shoes', 'General Merchandise'] },
+  { parent: 'Entertainment',     subs: ['Entertainment', 'Travel'] },
+  { parent: 'Gifts',             subs: ['Gifts'] },
+  { parent: 'Healthcare',        subs: ['Doctor', 'Dental', 'Pharmacy'] },
+  { parent: 'Kids',              subs: ['Activities', 'Pets / Pet Care'] },
+  { parent: 'Monthly Expenses',  subs: ['Bills', 'Home Maintenance'] },
+  { parent: 'Misc',              subs: ['Misc', 'Uncategorized'] },
+];
+
+// Flat list of all valid subcategories
+const ALL_SUBS = CAT_LIST.flatMap(g => g.subs);
+// Set for fast lookup
+const VALID_CATS = new Set(ALL_SUBS);
+// Map subcategory → parent
+const SUB_TO_PARENT = {};
+CAT_LIST.forEach(g => g.subs.forEach(s => SUB_TO_PARENT[s] = g.parent));
+
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+const state = {
+  transactions: [],  // all loaded transactions
+  accounts: [],      // { key, name, last4 }
+  // categorize session
+  catSession: [],    // rows being reviewed in categorize view
+};
+
+// ══════════════════════════════════════════════════
+//  PURE UTILITY FUNCTIONS (also used by tests)
+// ══════════════════════════════════════════════════
+
+function formatAccountKey(name, last4) {
+  return `${name.trim()} *${last4.trim()}`;
+}
+
+function parseCSV(raw) {
+  if (!raw || !raw.trim()) return [];
+  // Strip BOM
+  raw = raw.replace(/^\uFEFF/, '');
+  // Normalize line endings
+  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const rows = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    rows.push(parseCSVLine(line));
+  }
+  return rows;
+}
+
+function parseCSVLine(line) {
+  const fields = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      // Quoted field
+      let val = '';
+      i++; // skip opening quote
+      while (i < line.length) {
+        if (line[i] === '"' && line[i + 1] === '"') {
+          val += '"'; i += 2;
+        } else if (line[i] === '"') {
+          i++; break;
+        } else {
+          val += line[i++];
+        }
+      }
+      fields.push(val);
+      if (line[i] === ',') i++;
+    } else {
+      let val = '';
+      while (i < line.length && line[i] !== ',') val += line[i++];
+      fields.push(val.trim());
+      if (line[i] === ',') i++;
+    }
+  }
+  return fields;
+}
+
+function validateImport(rows, headerMap) {
+  // rows: array of field arrays (excluding header row)
+  // headerMap: { date, description, amount, category, fix } → column indices
+  const errors = [];
+  rows.forEach((fields, i) => {
+    const rowNum = i + 2; // 1-based, +1 for header
+    const cat = (fields[headerMap.category] || '').trim();
+    if (cat !== '' && !VALID_CATS.has(cat)) {
+      errors.push(`Row ${rowNum}: invalid category "${cat}"`);
+    }
+  });
+  return { valid: errors.length === 0, errors };
+}
+
+function buildHeaderMap(headerRow) {
+  // Returns null if required columns missing
+  const map = {};
+  headerRow.forEach((h, i) => {
+    const key = h.trim().toLowerCase();
+    if (key === 'date') map.date = i;
+    else if (key === 'description') map.description = i;
+    else if (key === 'amount') map.amount = i;
+    else if (key === 'category') map.category = i;
+    else if (key === 'fix') map.fix = i;
+  });
+  const missing = ['date', 'description', 'amount'].filter(k => map[k] === undefined);
+  if (missing.length) return { error: `Missing required columns: ${missing.join(', ')}` };
+  if (map.category === undefined) map.category = -1; // optional
+  if (map.fix === undefined) map.fix = -1;           // optional
+  return map;
+}
+
+function parseTransaction(fields, headerMap, accountKey) {
+  const cat = headerMap.category >= 0 ? (fields[headerMap.category] || '').trim() : '';
+  const fixRaw = headerMap.fix >= 0 ? (fields[headerMap.fix] || '').trim().toLowerCase() : '';
+  return {
+    id: crypto.randomUUID(),
+    accountKey,
+    date: (fields[headerMap.date] || '').trim(),
+    description: (fields[headerMap.description] || '').trim(),
+    amount: parseFloat((fields[headerMap.amount] || '0').replace(/[$,]/g, '')) || 0,
+    category: cat,
+    fix: fixRaw === 'true' || fixRaw === '1' || fixRaw === 'yes',
+  };
+}
+
+function deduplicateTransactions(existing, incoming) {
+  const keys = new Set(existing.map(t => `${t.accountKey}|${t.date}|${t.description}|${t.amount}`));
+  const result = [...existing];
+  for (const t of incoming) {
+    const k = `${t.accountKey}|${t.date}|${t.description}|${t.amount}`;
+    if (!keys.has(k)) {
+      keys.add(k);
+      result.push(t);
+    }
+  }
+  return result;
+}
+
+function filterByMonth(transactions, year, month) {
+  // month is 0-based (JS Date convention)
+  return transactions.filter(t => {
+    if (!t.date) return false;
+    const d = new Date(t.date + 'T00:00:00');
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+
+function aggregateByCategory(transactions) {
+  // Returns { parent: { sub: { total, count } } } and grandTotal
+  const groups = {};
+  let grandTotal = 0;
+  for (const t of transactions) {
+    if (!t.category) continue;
+    const parent = SUB_TO_PARENT[t.category] || 'Misc';
+    if (!groups[parent]) groups[parent] = {};
+    if (!groups[parent][t.category]) groups[parent][t.category] = { total: 0, count: 0 };
+    groups[parent][t.category].total += t.amount;
+    groups[parent][t.category].count++;
+    grandTotal += t.amount;
+  }
+  return { groups, grandTotal };
+}
+
+function totalSpend(transactions) {
+  return transactions.reduce((s, t) => s + t.amount, 0);
+}
+
+function cycleCategoryByKey(currentValue, key, subcategories) {
+  const lower = key.toLowerCase();
+  const matches = subcategories.filter(s => s.toLowerCase().startsWith(lower));
+  if (!matches.length) return currentValue;
+  const idx = matches.indexOf(currentValue);
+  return matches[(idx + 1) % matches.length];
+}
+
+function validateExport(rows) {
+  const invalidRows = [];
+  rows.forEach((r, i) => {
+    if (!r.category || !r.category.trim()) invalidRows.push(i);
+  });
+  return { valid: invalidRows.length === 0, invalidRows };
+}
+
+function toCSV(rows) {
+  const escape = v => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = ['Date,Description,Amount,Category,Fix'];
+  for (const r of rows) {
+    lines.push([
+      escape(r.date),
+      escape(r.description),
+      escape(r.amount),
+      escape(r.category),
+      r.fix ? 'true' : 'false',
+    ].join(','));
+  }
+  return lines.join('\n');
+}
+
+function fmtAmount(n) {
+  const abs = Math.abs(n).toFixed(2);
+  const sign = n < 0 ? '-' : '';
+  return `${sign}$${parseFloat(abs).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getMonthList(transactions) {
+  const seen = new Set();
+  transactions.forEach(t => {
+    if (!t.date) return;
+    const d = new Date(t.date + 'T00:00:00');
+    if (isNaN(d)) return;
+    seen.add(`${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`);
+  });
+  return [...seen].sort().map(s => {
+    const [y, m] = s.split('-');
+    return { year: parseInt(y), month: parseInt(m) };
+  });
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+
+// ══════════════════════════════════════════════════
+//  NAV
+// ══════════════════════════════════════════════════
+let currentView = 'load';
+
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    switchView(btn.dataset.view);
+  });
+});
+
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
+  if (view === 'budget') renderBudget();
+}
+
+// ══════════════════════════════════════════════════
+//  LOAD VIEW
+// ══════════════════════════════════════════════════
+document.getElementById('load-import-btn').addEventListener('click', handleLoadImport);
+
+function handleLoadImport() {
+  const name = document.getElementById('load-acct-name').value.trim();
+  const last4 = document.getElementById('load-acct-last4').value.trim();
+  const raw = document.getElementById('load-csv').value;
+  const errDiv = document.getElementById('load-errors');
+
+  errDiv.style.display = 'none';
+  errDiv.innerHTML = '';
+
+  if (!name) return showLoadError('Account name is required.');
+  if (!/^\d{4}$/.test(last4)) return showLoadError('Last 4 digits must be exactly 4 numbers.');
+  if (!raw.trim()) return showLoadError('Please paste CSV data.');
+
+  const rows = parseCSV(raw);
+  if (rows.length < 2) return showLoadError('CSV must have a header row and at least one data row.');
+
+  const headerMap = buildHeaderMap(rows[0]);
+  if (headerMap.error) return showLoadError(headerMap.error);
+
+  const dataRows = rows.slice(1);
+  const validation = validateImport(dataRows, headerMap);
+  if (!validation.valid) {
+    showLoadError(`Import rejected — fix the following errors before loading:<ul style="margin-top:6px;padding-left:18px;">${
+      validation.errors.map(e => `<li>${e}</li>`).join('')
+    }</ul>`);
+    return;
+  }
+
+  const accountKey = formatAccountKey(name, last4);
+  const incoming = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
+  state.transactions = deduplicateTransactions(state.transactions, incoming);
+
+  // Update accounts list
+  if (!state.accounts.find(a => a.key === accountKey)) {
+    state.accounts.push({ key: accountKey, name, last4 });
+  }
+
+  // Clear form
+  document.getElementById('load-csv').value = '';
+
+  renderLoadSummary();
+  showLoadSuccess(`Loaded ${incoming.length} rows for <strong>${accountKey}</strong>.`);
+}
+
+function showLoadError(msg) {
+  const el = document.getElementById('load-errors');
+  el.className = 'alert alert-error';
+  el.innerHTML = msg;
+  el.style.display = 'block';
+}
+
+function showLoadSuccess(msg) {
+  const el = document.getElementById('load-errors');
+  el.className = 'alert alert-success';
+  el.innerHTML = msg;
+  el.style.display = 'block';
+}
+
+function renderLoadSummary() {
+  const summary = document.getElementById('load-summary');
+  summary.style.display = 'block';
+  document.getElementById('total-tx-count').textContent = state.transactions.length;
+
+  const list = document.getElementById('accounts-list');
+  list.innerHTML = '';
+  state.accounts.forEach(a => {
+    const count = state.transactions.filter(t => t.accountKey === a.key).length;
+    const chip = document.createElement('div');
+    chip.className = 'account-chip';
+    chip.innerHTML = `${a.key} <span>${count}</span>`;
+    list.appendChild(chip);
+  });
+
+  const uncategorized = state.transactions.filter(t => !t.category).length;
+  const notice = document.getElementById('uncategorized-notice');
+  if (uncategorized > 0) {
+    notice.textContent = `${uncategorized} transaction(s) have no category — visit Categorize to assign them.`;
+    notice.style.display = 'block';
+  } else {
+    notice.style.display = 'none';
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  BUDGET VIEW
+// ══════════════════════════════════════════════════
+let budgetMonths = [];
+let budgetIdx = 0;
+
+document.getElementById('budget-prev').addEventListener('click', () => {
+  if (budgetIdx > 0) { budgetIdx--; renderBudgetMonth(); }
+});
+document.getElementById('budget-next').addEventListener('click', () => {
+  if (budgetIdx < budgetMonths.length - 1) { budgetIdx++; renderBudgetMonth(); }
+});
+
+function renderBudget() {
+  const hasData = state.transactions.length > 0;
+  document.getElementById('budget-empty').style.display = hasData ? 'none' : 'block';
+  document.getElementById('budget-content').style.display = hasData ? 'block' : 'none';
+  if (!hasData) return;
+
+  // Total all time
+  const total = totalSpend(state.transactions);
+  document.getElementById('budget-total-all').textContent = fmtAmount(total);
+  document.getElementById('budget-tx-count').textContent = state.transactions.length;
+
+  budgetMonths = getMonthList(state.transactions);
+  // Default to most recent month
+  budgetIdx = budgetMonths.length - 1;
+  renderBudgetMonth();
+}
+
+function renderBudgetMonth() {
+  if (!budgetMonths.length) return;
+  const { year, month } = budgetMonths[budgetIdx];
+  document.getElementById('budget-month-label').textContent = `${MONTH_NAMES[month]} ${year}`;
+  document.getElementById('budget-prev').disabled = budgetIdx === 0;
+  document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
+
+  const monthTx = filterByMonth(state.transactions, year, month);
+  const uncategorized = monthTx.filter(t => !t.category).length;
+
+  const warnEl = document.getElementById('budget-warn');
+  if (uncategorized > 0) {
+    warnEl.className = 'alert alert-warn';
+    warnEl.textContent = `${uncategorized} transaction(s) this month have no category and are excluded from totals.`;
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
+  }
+
+  const { groups, grandTotal } = aggregateByCategory(monthTx);
+  document.getElementById('budget-month-total').textContent = `Month total: ${fmtAmount(grandTotal)}`;
+
+  const tbody = document.getElementById('budget-tbody');
+  tbody.innerHTML = '';
+
+  CAT_LIST.forEach(({ parent, subs }) => {
+    // Only show parents that have data this month
+    const parentData = groups[parent];
+    if (!parentData) return;
+
+    const parentTotal = Object.values(parentData).reduce((s, v) => s + v.total, 0);
+    const parentCount = Object.values(parentData).reduce((s, v) => s + v.count, 0);
+
+    const pRow = document.createElement('tr');
+    pRow.className = 'parent-row';
+    pRow.innerHTML = `
+      <td>${parent}</td>
+      <td class="td-amount ${parentTotal < 0 ? 'neg' : 'pos'}">${fmtAmount(parentTotal)}</td>
+      <td style="text-align:right;">${parentCount}</td>
+    `;
+    tbody.appendChild(pRow);
+
+    subs.forEach(sub => {
+      if (!parentData[sub]) return;
+      const { total, count } = parentData[sub];
+      const sRow = document.createElement('tr');
+      sRow.className = 'sub-row';
+      sRow.innerHTML = `
+        <td>${sub}</td>
+        <td class="td-amount ${total < 0 ? 'neg' : 'pos'}">${fmtAmount(total)}</td>
+        <td style="text-align:right;">${count}</td>
+      `;
+      tbody.appendChild(sRow);
+    });
+  });
+
+  // Grand total row
+  const tRow = document.createElement('tr');
+  tRow.className = 'total-row';
+  const totalTx = monthTx.filter(t => t.category).length;
+  tRow.innerHTML = `
+    <td>TOTAL</td>
+    <td class="td-amount">${fmtAmount(grandTotal)}</td>
+    <td style="text-align:right;">${totalTx}</td>
+  `;
+  tbody.appendChild(tRow);
+}
+
+// ══════════════════════════════════════════════════
+//  CATEGORIZE VIEW
+// ══════════════════════════════════════════════════
+document.getElementById('cat-import-btn').addEventListener('click', handleCatImport);
+document.getElementById('cat-export-btn').addEventListener('click', handleCatExport);
+document.getElementById('cat-copy-btn').addEventListener('click', () => {
+  const ta = document.getElementById('export-output');
+  ta.select();
+  document.execCommand('copy');
+});
+
+function handleCatImport() {
+  const name = document.getElementById('cat-acct-name').value.trim();
+  const last4 = document.getElementById('cat-acct-last4').value.trim();
+  const raw = document.getElementById('cat-csv').value;
+  const errDiv = document.getElementById('cat-import-errors');
+
+  errDiv.style.display = 'none';
+  errDiv.innerHTML = '';
+
+  if (!name) return showCatError('Account name is required.');
+  if (!/^\d{4}$/.test(last4)) return showCatError('Last 4 digits must be exactly 4 numbers.');
+  if (!raw.trim()) return showCatError('Please paste CSV data.');
+
+  const rows = parseCSV(raw);
+  if (rows.length < 2) return showCatError('CSV must have a header row and at least one data row.');
+
+  const headerMap = buildHeaderMap(rows[0]);
+  if (headerMap.error) return showCatError(headerMap.error);
+
+  const dataRows = rows.slice(1);
+  const validation = validateImport(dataRows, headerMap);
+  if (!validation.valid) {
+    showCatImportError(`Import rejected:<ul style="margin-top:6px;padding-left:18px;">${
+      validation.errors.map(e => `<li>${e}</li>`).join('')
+    }</ul>`);
+    return;
+  }
+
+  const accountKey = formatAccountKey(name, last4);
+  state.catSession = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
+
+  renderCatTable();
+  document.getElementById('cat-review').style.display = 'block';
+  document.getElementById('cat-export-card').style.display = 'none';
+}
+
+function showCatError(msg) {
+  const el = document.getElementById('cat-import-errors');
+  el.className = 'alert alert-error';
+  el.innerHTML = msg;
+  el.style.display = 'block';
+}
+
+function showCatImportError(msg) {
+  const el = document.getElementById('cat-import-errors');
+  el.className = 'alert alert-error';
+  el.innerHTML = msg;
+  el.style.display = 'block';
+}
+
+function buildCatSelectHTML(current) {
+  let html = '<option value="">-- Select --</option>';
+  CAT_LIST.forEach(({ parent, subs }) => {
+    html += `<optgroup label="${parent}">`;
+    subs.forEach(sub => {
+      html += `<option value="${sub}"${sub === current ? ' selected' : ''}>${sub}</option>`;
+    });
+    html += '</optgroup>';
+  });
+  return html;
+}
+
+function renderCatTable() {
+  const tbody = document.getElementById('cat-tbody');
+  tbody.innerHTML = '';
+
+  state.catSession.forEach((tx, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+
+    const hasCat = !!tx.category;
+    tr.innerHTML = `
+      <td class="td-date">${tx.date}</td>
+      <td class="td-desc" title="${tx.description}">${tx.description}</td>
+      <td class="td-amount ${tx.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(tx.amount)}</td>
+      <td class="td-cat ${hasCat ? '' : 'cat-error'}">
+        <select data-idx="${i}">
+          ${buildCatSelectHTML(tx.category)}
+        </select>
+      </td>
+      <td class="td-fix">
+        <input type="checkbox" data-idx="${i}" data-field="fix" ${tx.fix ? 'checked' : ''}>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Category select handlers
+  tbody.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      state.catSession[idx].category = e.target.value;
+      e.target.closest('td').classList.toggle('cat-error', !e.target.value);
+      updateCatProgress();
+    });
+
+    sel.addEventListener('keydown', e => {
+      // Only intercept single letter keys, not special keys
+      if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const idx = parseInt(sel.dataset.idx);
+        const current = state.catSession[idx].category;
+        const next = cycleCategoryByKey(current, e.key, ALL_SUBS);
+        if (next !== current) {
+          state.catSession[idx].category = next;
+          sel.value = next;
+          sel.closest('td').classList.remove('cat-error');
+          updateCatProgress();
+        }
+      }
+    });
+  });
+
+  // Fix checkbox handlers
+  tbody.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      state.catSession[idx].fix = e.target.checked;
+    });
+  });
+
+  updateCatProgress();
+}
+
+function updateCatProgress() {
+  const total = state.catSession.length;
+  const done = state.catSession.filter(t => t.category).length;
+  document.getElementById('cat-progress').textContent = `${done} / ${total} categorized`;
+  const allDone = done === total;
+  document.getElementById('cat-export-btn').disabled = false; // always enabled, validate on click
+  document.getElementById('cat-export-error').style.display = 'none';
+}
+
+function handleCatExport() {
+  const validation = validateExport(state.catSession);
+  const errEl = document.getElementById('cat-export-error');
+
+  if (!validation.valid) {
+    const rowNums = validation.invalidRows.map(i => i + 1).join(', ');
+    errEl.className = 'alert alert-error';
+    errEl.innerHTML = `<strong>Cannot export:</strong> The following rows are missing a category: rows ${rowNums}. Please assign a category to each transaction.`;
+    errEl.style.display = 'block';
+
+    // Highlight missing rows
+    document.querySelectorAll('#cat-tbody tr').forEach(tr => {
+      const idx = parseInt(tr.dataset.idx);
+      const sel = tr.querySelector('select');
+      if (validation.invalidRows.includes(idx)) {
+        sel.closest('td').classList.add('cat-error');
+      }
+    });
+    return;
+  }
+
+  errEl.style.display = 'none';
+  const csv = toCSV(state.catSession);
+  document.getElementById('export-output').value = csv;
+  document.getElementById('cat-export-card').style.display = 'block';
+  document.getElementById('cat-export-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ══════════════════════════════════════════════════
+//  EXPOSE PURE FUNCTIONS FOR TESTS
+// ══════════════════════════════════════════════════
+window.__financeLib = {
+  parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
+  parseTransaction, deduplicateTransactions, filterByMonth, aggregateByCategory,
+  totalSpend, cycleCategoryByKey, validateExport, toCSV,
+  CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
+};
+</script>
+</body>
+</html>
