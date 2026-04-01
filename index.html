@@ -771,15 +771,13 @@ function handleLoadImport() {
   if (!raw.trim()) return showLoadError('Please paste CSV data.');
 
   const rows = parseCSV(raw);
-  if (rows.length < 2) return showLoadError('CSV must have a header row and at least one data row.');
+  if (rows.length < 1) return showLoadError('CSV must have at least one data row.');
 
-  const headers = rows[0].map(h => h.trim().toLowerCase());
-  const headersMatch = LOAD_EXPECTED_HEADERS.every((f, i) => headers[i] === f);
-  if (!headersMatch || headers.length < LOAD_EXPECTED_HEADERS.length) {
-    return showLoadError(`CSV must have exactly these columns in order: <strong>${LOAD_EXPECTED_HEADERS.join(', ')}</strong>`);
-  }
+  // Skip header row if present (auto-detect by matching expected field names)
+  const firstRowIsHeader = LOAD_EXPECTED_HEADERS.every((f, i) => (rows[0][i] || '').trim().toLowerCase() === f);
+  const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
+  if (dataRows.length < 1) return showLoadError('CSV must have at least one data row.');
 
-  const dataRows = rows.slice(1);
   const validation = validateImport(dataRows, LOAD_HEADER_MAP);
   if (!validation.valid) {
     showLoadError(`Import rejected — fix the following errors before loading:<ul style="margin-top:6px;padding-left:18px;">${
@@ -971,12 +969,17 @@ function handleCatImport() {
   if (!raw.trim()) return showCatError('Please paste CSV data.');
 
   const rows = parseCSV(raw);
-  if (rows.length < 2) return showCatError('CSV must have a header row and at least one data row.');
+  if (rows.length < 1) return showCatError('CSV must have at least one data row.');
+
+  // Skip header row if present (auto-detect: mapped positions match field names)
+  const firstRowIsHeader = account.inputCsvFormat.every((field, i) =>
+    !field || (rows[0][i] || '').trim().toLowerCase() === field.toLowerCase()
+  );
+  const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
+  if (dataRows.length < 1) return showCatError('CSV must have at least one data row.');
 
   const headerMap = buildHeaderMap(rows[0], account.inputCsvFormat);
   if (headerMap.error) return showCatError(headerMap.error);
-
-  const dataRows = rows.slice(1);
   const validation = validateImport(dataRows, headerMap);
   if (!validation.valid) {
     showCatImportError(`Import rejected:<ul style="margin-top:6px;padding-left:18px;">${
