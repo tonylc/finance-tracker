@@ -572,16 +572,37 @@ function parseCSVLine(line) {
   return fields;
 }
 
-function validateImport(rows, headerMap) {
+function validateImport(rows, headerMap, requireCategory) {
   // rows: array of field arrays (excluding header row)
   // headerMap: { date, description, amount, category, fix } → column indices
   const errors = [];
   rows.forEach((fields, i) => {
     const rowNum = i + 2; // 1-based, +1 for header
+
+    // date — must be non-blank and parseable as a date
+    const dateVal = (fields[headerMap.date] || '').trim();
+    if (!dateVal)
+      errors.push(`Row ${rowNum}: date is blank`);
+    else if (isNaN(new Date(dateVal).getTime()))
+      errors.push(`Row ${rowNum}: date "${dateVal}" is not a valid date`);
+
+    // description — must be a non-blank string
+    if (!(fields[headerMap.description] || '').trim())
+      errors.push(`Row ${rowNum}: description is blank`);
+
+    // amount — must be non-blank and parse as a finite number
+    const amtRaw = (fields[headerMap.amount] || '').trim();
+    if (!amtRaw)
+      errors.push(`Row ${rowNum}: amount is blank`);
+    else if (!isFinite(parseFloat(amtRaw.replace(/[$,]/g, ''))))
+      errors.push(`Row ${rowNum}: amount "${amtRaw}" is not a valid number`);
+
+    // category
     const cat = (fields[headerMap.category] || '').trim();
-    if (cat !== '' && !VALID_CATS.has(cat)) {
+    if (requireCategory && !cat)
+      errors.push(`Row ${rowNum}: category is blank`);
+    if (cat && !VALID_CATS.has(cat))
       errors.push(`Row ${rowNum}: invalid category "${cat}"`);
-    }
   });
   return { valid: errors.length === 0, errors };
 }
@@ -778,7 +799,7 @@ function handleLoadImport() {
   const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
   if (dataRows.length < 1) return showLoadError('CSV must have at least one data row.');
 
-  const validation = validateImport(dataRows, LOAD_HEADER_MAP);
+  const validation = validateImport(dataRows, LOAD_HEADER_MAP, true);
   if (!validation.valid) {
     showLoadError(`Import rejected — fix the following errors before loading:<ul style="margin-top:6px;padding-left:18px;">${
       validation.errors.map(e => `<li>${e}</li>`).join('')
