@@ -241,6 +241,13 @@
   .mt-20 { margin-top: 20px; }
   .flex-between { display: flex; justify-content: space-between; align-items: center; }
   .row-error-indicator { color: #e53935; font-weight: 700; font-size: 11px; margin-left: 4px; }
+
+  /* ── Settings view ── */
+  .col-mapping-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .col-mapping-row .col-name { flex: 1; font-size: 12px; color: #555; font-family: 'Courier New', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col-mapping-row select { flex: 0 0 160px; }
+  .btn-danger { background: #fdecea; color: #b71c1c; border: 1px solid #f5c6cb; }
+  .btn-danger:hover { background: #f5c6cb; }
 </style>
 </head>
 <body>
@@ -251,6 +258,7 @@
     <button class="active" data-view="load">Load</button>
     <button data-view="budget">Budget</button>
     <button data-view="categorize">Categorize</button>
+    <button data-view="settings">Settings</button>
   </nav>
 </header>
 
@@ -262,27 +270,30 @@
 
     <div class="card">
       <h3>Account</h3>
+      <div id="load-no-accounts" style="display:none;">
+        <p style="font-size:13px;color:#777;">No accounts configured yet. <a href="#" id="load-goto-settings">Go to Settings</a> to add one.</p>
+      </div>
       <div class="form-row">
         <div class="field">
-          <label for="load-acct-name">Account Name</label>
-          <input type="text" id="load-acct-name" placeholder="e.g. Chase, BofA, Citi (tony)">
-        </div>
-        <div class="field-sm">
-          <label for="load-acct-last4">Last 4 Digits</label>
-          <input type="text" id="load-acct-last4" maxlength="4" placeholder="7515">
+          <label for="load-acct-profile">Account Profile</label>
+          <select id="load-acct-profile">
+            <option value="" disabled selected>-- Select an account --</option>
+          </select>
         </div>
       </div>
 
-      <h3>CSV Data</h3>
-      <p style="font-size:12px;color:#777;margin-bottom:8px;">
-        Columns: <strong>Date, Description, Amount, Category, Fix</strong>. Include header row. Category may be blank (will appear in Categorize view).
-      </p>
-      <textarea id="load-csv" rows="8" placeholder="Paste CSV here..."></textarea>
+      <div id="load-csv-section" style="display:none;">
+        <h3>CSV Data</h3>
+        <p style="font-size:12px;color:#777;margin-bottom:8px;">
+          Paste the raw CSV exported from your bank below. Include the header row.
+        </p>
+        <textarea id="load-csv" rows="8" placeholder="Paste CSV here..."></textarea>
 
-      <div id="load-errors" style="margin-top:12px;display:none;"></div>
+        <div id="load-errors" style="margin-top:12px;display:none;"></div>
 
-      <div class="mt-16">
-        <button class="btn btn-primary" id="load-import-btn">Import Transactions</button>
+        <div class="mt-16">
+          <button class="btn btn-primary" id="load-import-btn">Import Transactions</button>
+        </div>
       </div>
     </div>
 
@@ -348,21 +359,24 @@
 
     <div class="card">
       <h3>Import for Categorization</h3>
+      <div id="cat-no-accounts" style="display:none;">
+        <p style="font-size:13px;color:#777;">No accounts configured yet. <a href="#" id="cat-goto-settings">Go to Settings</a> to add one.</p>
+      </div>
       <div class="form-row">
         <div class="field">
-          <label for="cat-acct-name">Account Name</label>
-          <input type="text" id="cat-acct-name" placeholder="e.g. Chase">
-        </div>
-        <div class="field-sm">
-          <label for="cat-acct-last4">Last 4 Digits</label>
-          <input type="text" id="cat-acct-last4" maxlength="4" placeholder="7515">
+          <label for="cat-acct-profile">Account Profile</label>
+          <select id="cat-acct-profile">
+            <option value="" disabled selected>-- Select an account --</option>
+          </select>
         </div>
       </div>
-      <textarea id="cat-csv" rows="6" placeholder="Paste CSV here (uncategorized transactions)..."></textarea>
-      <div id="cat-import-errors" style="margin-top:10px;display:none;"></div>
-      <div class="mt-16 flex-between">
-        <button class="btn btn-primary" id="cat-import-btn">Load for Review</button>
-        <span style="font-size:12px;color:#777;">Rows without a category will be editable below.</span>
+      <div id="cat-csv-section" style="display:none;">
+        <textarea id="cat-csv" rows="6" placeholder="Paste CSV here (uncategorized transactions)..."></textarea>
+        <div id="cat-import-errors" style="margin-top:10px;display:none;"></div>
+        <div class="mt-16 flex-between">
+          <button class="btn btn-primary" id="cat-import-btn">Load for Review</button>
+          <span style="font-size:12px;color:#777;">Rows without a category will be editable below.</span>
+        </div>
       </div>
     </div>
 
@@ -404,6 +418,62 @@
     </div>
   </div>
 
+  <!-- ══════════════════ SETTINGS VIEW ══════════════════ -->
+  <div id="view-settings" class="view">
+    <h2>Settings</h2>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px;">
+        <h3 style="margin:0;">Account Profiles</h3>
+        <button class="btn btn-primary btn-sm" id="settings-add-btn">+ Add Account</button>
+      </div>
+      <div id="settings-empty" class="empty-state" style="display:none;">No accounts configured yet. Click &ldquo;+ Add Account&rdquo; to get started.</div>
+      <table id="settings-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>Account Name</th>
+            <th>Last 4</th>
+            <th>Columns Mapped</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="settings-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="settings-form-card" style="display:none;">
+      <h3 id="settings-form-title">Add Account</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="sf-name">Account Name</label>
+          <input type="text" id="sf-name" placeholder="e.g. Chase Checking">
+        </div>
+        <div class="field-sm">
+          <label for="sf-last4">Last 4 Digits</label>
+          <input type="text" id="sf-last4" maxlength="4" placeholder="1234">
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label for="sf-header-row">Bank CSV Header Row</label>
+        <p style="font-size:12px;color:#777;margin-bottom:6px;">Paste the first line (column headers) from your bank&rsquo;s CSV export.</p>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <input type="text" id="sf-header-row" placeholder="e.g. Trans Date,Post Date,Description,Amount,Category">
+          <button class="btn btn-primary btn-sm" id="sf-parse-btn" style="white-space:nowrap;flex-shrink:0;">Parse Columns</button>
+        </div>
+      </div>
+      <div id="sf-columns-section" style="display:none;margin-bottom:14px;">
+        <label>Column Mappings</label>
+        <p style="font-size:12px;color:#777;margin-bottom:8px;">Assign each column to a field. <strong>Date, Description, Amount</strong> are required.</p>
+        <div id="sf-columns-grid"></div>
+      </div>
+      <div id="sf-form-error" style="display:none;"></div>
+      <div class="mt-16" style="display:flex;gap:8px;">
+        <button class="btn btn-primary" id="sf-save-btn">Save Account</button>
+        <button class="btn" style="background:#eee;color:#333;" id="sf-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -436,9 +506,20 @@ CAT_LIST.forEach(g => g.subs.forEach(s => SUB_TO_PARENT[s] = g.parent));
 const state = {
   transactions: [],  // all loaded transactions
   accounts: [],      // { key, name, last4 }
-  // categorize session
   catSession: [],    // rows being reviewed in categorize view
+  userConfig: { accounts: [] }, // persisted account profiles
 };
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem('financeTrackerConfig');
+    if (raw) state.userConfig = JSON.parse(raw);
+  } catch (e) { /* ignore corrupt data */ }
+}
+
+function saveConfig() {
+  localStorage.setItem('financeTrackerConfig', JSON.stringify(state.userConfig));
+}
 
 // ══════════════════════════════════════════════════
 //  PURE UTILITY FUNCTIONS (also used by tests)
@@ -505,17 +586,22 @@ function validateImport(rows, headerMap) {
   return { valid: errors.length === 0, errors };
 }
 
-function buildHeaderMap(headerRow) {
-  // Returns null if required columns missing
+function buildHeaderMap(headerRow, inputCsvFormat) {
   const map = {};
-  headerRow.forEach((h, i) => {
-    const key = h.trim().toLowerCase();
-    if (key === 'date') map.date = i;
-    else if (key === 'description') map.description = i;
-    else if (key === 'amount') map.amount = i;
-    else if (key === 'category') map.category = i;
-    else if (key === 'fix') map.fix = i;
-  });
+  if (inputCsvFormat) {
+    // Positional mapping: array index = CSV column index, value = field name or null
+    inputCsvFormat.forEach((field, i) => { if (field) map[field] = i; });
+  } else {
+    // Fallback: match by lowercase header name (preserves existing behaviour)
+    headerRow.forEach((h, i) => {
+      const key = h.trim().toLowerCase();
+      if (key === 'date') map.date = i;
+      else if (key === 'description') map.description = i;
+      else if (key === 'amount') map.amount = i;
+      else if (key === 'category') map.category = i;
+      else if (key === 'fix') map.fix = i;
+    });
+  }
   const missing = ['date', 'description', 'amount'].filter(k => map[k] === undefined);
   if (missing.length) return { error: `Missing required columns: ${missing.join(', ')}` };
   if (map.category === undefined) map.category = -1; // optional
@@ -652,30 +738,39 @@ function switchView(view) {
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
   if (view === 'budget') renderBudget();
+  if (view === 'settings') renderSettingsTable();
 }
 
 // ══════════════════════════════════════════════════
 //  LOAD VIEW
 // ══════════════════════════════════════════════════
 document.getElementById('load-import-btn').addEventListener('click', handleLoadImport);
+document.getElementById('load-acct-profile').addEventListener('change', function () {
+  document.getElementById('load-csv-section').style.display = this.value ? 'block' : 'none';
+});
+document.getElementById('load-goto-settings').addEventListener('click', e => {
+  e.preventDefault();
+  switchView('settings');
+});
 
 function handleLoadImport() {
-  const name = document.getElementById('load-acct-name').value.trim();
-  const last4 = document.getElementById('load-acct-last4').value.trim();
-  const raw = document.getElementById('load-csv').value;
+  const profileId = document.getElementById('load-acct-profile').value;
   const errDiv = document.getElementById('load-errors');
-
   errDiv.style.display = 'none';
   errDiv.innerHTML = '';
 
-  if (!name) return showLoadError('Account name is required.');
-  if (!/^\d{4}$/.test(last4)) return showLoadError('Last 4 digits must be exactly 4 numbers.');
+  if (!profileId) return showLoadError('Please select an account profile.');
+
+  const account = state.userConfig.accounts.find(a => a.id === profileId);
+  if (!account) return showLoadError('Selected account profile not found.');
+
+  const raw = document.getElementById('load-csv').value;
   if (!raw.trim()) return showLoadError('Please paste CSV data.');
 
   const rows = parseCSV(raw);
   if (rows.length < 2) return showLoadError('CSV must have a header row and at least one data row.');
 
-  const headerMap = buildHeaderMap(rows[0]);
+  const headerMap = buildHeaderMap(rows[0], account.inputCsvFormat);
   if (headerMap.error) return showLoadError(headerMap.error);
 
   const dataRows = rows.slice(1);
@@ -687,18 +782,15 @@ function handleLoadImport() {
     return;
   }
 
-  const accountKey = formatAccountKey(name, last4);
+  const accountKey = formatAccountKey(account.name, account.last4);
   const incoming = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
   state.transactions = deduplicateTransactions(state.transactions, incoming);
 
-  // Update accounts list
   if (!state.accounts.find(a => a.key === accountKey)) {
-    state.accounts.push({ key: accountKey, name, last4 });
+    state.accounts.push({ key: accountKey, name: account.name, last4: account.last4 });
   }
 
-  // Clear form
   document.getElementById('load-csv').value = '';
-
   renderLoadSummary();
   showLoadSuccess(`Loaded ${incoming.length} rows for <strong>${accountKey}</strong>.`);
 }
@@ -850,24 +942,32 @@ document.getElementById('cat-copy-btn').addEventListener('click', () => {
   ta.select();
   document.execCommand('copy');
 });
+document.getElementById('cat-acct-profile').addEventListener('change', function () {
+  document.getElementById('cat-csv-section').style.display = this.value ? 'block' : 'none';
+});
+document.getElementById('cat-goto-settings').addEventListener('click', e => {
+  e.preventDefault();
+  switchView('settings');
+});
 
 function handleCatImport() {
-  const name = document.getElementById('cat-acct-name').value.trim();
-  const last4 = document.getElementById('cat-acct-last4').value.trim();
-  const raw = document.getElementById('cat-csv').value;
+  const profileId = document.getElementById('cat-acct-profile').value;
   const errDiv = document.getElementById('cat-import-errors');
-
   errDiv.style.display = 'none';
   errDiv.innerHTML = '';
 
-  if (!name) return showCatError('Account name is required.');
-  if (!/^\d{4}$/.test(last4)) return showCatError('Last 4 digits must be exactly 4 numbers.');
+  if (!profileId) return showCatError('Please select an account profile.');
+
+  const account = state.userConfig.accounts.find(a => a.id === profileId);
+  if (!account) return showCatError('Selected account profile not found.');
+
+  const raw = document.getElementById('cat-csv').value;
   if (!raw.trim()) return showCatError('Please paste CSV data.');
 
   const rows = parseCSV(raw);
   if (rows.length < 2) return showCatError('CSV must have a header row and at least one data row.');
 
-  const headerMap = buildHeaderMap(rows[0]);
+  const headerMap = buildHeaderMap(rows[0], account.inputCsvFormat);
   if (headerMap.error) return showCatError(headerMap.error);
 
   const dataRows = rows.slice(1);
@@ -879,7 +979,7 @@ function handleCatImport() {
     return;
   }
 
-  const accountKey = formatAccountKey(name, last4);
+  const accountKey = formatAccountKey(account.name, account.last4);
   state.catSession = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
 
   renderCatTable();
@@ -1011,6 +1111,229 @@ function handleCatExport() {
   document.getElementById('cat-export-card').style.display = 'block';
   document.getElementById('cat-export-card').scrollIntoView({ behavior: 'smooth' });
 }
+
+// ══════════════════════════════════════════════════
+//  SETTINGS VIEW
+// ══════════════════════════════════════════════════
+let editingAccountId = null;
+
+document.getElementById('settings-add-btn').addEventListener('click', () => showAccountForm(null));
+document.getElementById('sf-parse-btn').addEventListener('click', parseHeaderRow);
+document.getElementById('sf-save-btn').addEventListener('click', saveAccountConfig);
+document.getElementById('sf-cancel-btn').addEventListener('click', hideAccountForm);
+
+function renderSettingsTable() {
+  const accounts = state.userConfig.accounts;
+  const emptyEl = document.getElementById('settings-empty');
+  const tableEl = document.getElementById('settings-table');
+  const tbody = document.getElementById('settings-tbody');
+
+  if (accounts.length === 0) {
+    emptyEl.style.display = 'block';
+    tableEl.style.display = 'none';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  tableEl.style.display = 'table';
+  tbody.innerHTML = '';
+
+  accounts.forEach(a => {
+    const mapped = a.inputCsvFormat.filter(f => f !== null).length;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${a.name}</td>
+      <td>*${a.last4}</td>
+      <td>${mapped} of ${a.inputCsvFormat.length} columns mapped</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm" style="background:#eee;color:#333;margin-right:4px;" onclick="showAccountForm('${a.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteAccountConfig('${a.id}')">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function showAccountForm(accountId) {
+  editingAccountId = accountId;
+  document.getElementById('settings-form-title').textContent = accountId ? 'Edit Account' : 'Add Account';
+  document.getElementById('sf-name').value = '';
+  document.getElementById('sf-last4').value = '';
+  document.getElementById('sf-header-row').value = '';
+  document.getElementById('sf-columns-section').style.display = 'none';
+  document.getElementById('sf-columns-grid').innerHTML = '';
+  document.getElementById('sf-form-error').style.display = 'none';
+
+  if (accountId) {
+    const account = state.userConfig.accounts.find(a => a.id === accountId);
+    if (account) {
+      document.getElementById('sf-name').value = account.name;
+      document.getElementById('sf-last4').value = account.last4;
+      renderColumnMappings(null, account.inputCsvFormat);
+    }
+  }
+
+  const formCard = document.getElementById('settings-form-card');
+  formCard.style.display = 'block';
+  formCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideAccountForm() {
+  document.getElementById('settings-form-card').style.display = 'none';
+  editingAccountId = null;
+}
+
+function parseHeaderRow() {
+  const headerRowInput = document.getElementById('sf-header-row').value.trim();
+  const errEl = document.getElementById('sf-form-error');
+  if (!headerRowInput) {
+    errEl.className = 'alert alert-error';
+    errEl.textContent = 'Please paste a header row first.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  renderColumnMappings(parseCSVLine(headerRowInput), null);
+}
+
+function renderColumnMappings(columns, existingFormat) {
+  const grid = document.getElementById('sf-columns-grid');
+  grid.innerHTML = '';
+  const count = columns ? columns.length : existingFormat.length;
+  const fieldOptions = [
+    { value: '', label: '— skip —' },
+    { value: 'date', label: 'Date' },
+    { value: 'description', label: 'Description' },
+    { value: 'amount', label: 'Amount' },
+    { value: 'category', label: 'Category' },
+    { value: 'fix', label: 'Fix' },
+  ];
+
+  for (let i = 0; i < count; i++) {
+    const colName = columns ? columns[i] : `Column ${i}`;
+    const existingField = existingFormat ? (existingFormat[i] || '') : '';
+
+    const row = document.createElement('div');
+    row.className = 'col-mapping-row';
+
+    const label = document.createElement('span');
+    label.className = 'col-name';
+    label.title = colName;
+    label.textContent = `Col ${i}: ${colName}`;
+
+    const sel = document.createElement('select');
+    sel.dataset.colIndex = i;
+    fieldOptions.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.value;
+      opt.textContent = f.label;
+      if (f.value === existingField) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
+    row.appendChild(label);
+    row.appendChild(sel);
+    grid.appendChild(row);
+  }
+
+  document.getElementById('sf-columns-section').style.display = 'block';
+}
+
+function saveAccountConfig() {
+  const name = document.getElementById('sf-name').value.trim();
+  const last4 = document.getElementById('sf-last4').value.trim();
+  const errEl = document.getElementById('sf-form-error');
+
+  if (!name) {
+    errEl.className = 'alert alert-error';
+    errEl.textContent = 'Account name is required.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!/^\d{4}$/.test(last4)) {
+    errEl.className = 'alert alert-error';
+    errEl.textContent = 'Last 4 digits must be exactly 4 numbers.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (document.getElementById('sf-columns-section').style.display === 'none') {
+    errEl.className = 'alert alert-error';
+    errEl.textContent = 'Please parse your bank\'s CSV header row and assign column mappings.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const selects = document.getElementById('sf-columns-grid').querySelectorAll('select');
+  const inputCsvFormat = [];
+  selects.forEach(sel => {
+    inputCsvFormat[parseInt(sel.dataset.colIndex)] = sel.value || null;
+  });
+
+  const missing = ['date', 'description', 'amount'].filter(f => !inputCsvFormat.includes(f));
+  if (missing.length) {
+    errEl.className = 'alert alert-error';
+    errEl.textContent = `Please assign the following required fields: ${missing.join(', ')}.`;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  errEl.style.display = 'none';
+
+  if (editingAccountId) {
+    const idx = state.userConfig.accounts.findIndex(a => a.id === editingAccountId);
+    if (idx >= 0) state.userConfig.accounts[idx] = { ...state.userConfig.accounts[idx], name, last4, inputCsvFormat };
+  } else {
+    state.userConfig.accounts.push({ id: crypto.randomUUID(), name, last4, inputCsvFormat });
+  }
+
+  saveConfig();
+  populateAccountDropdowns();
+  renderSettingsTable();
+  hideAccountForm();
+}
+
+function deleteAccountConfig(id) {
+  state.userConfig.accounts = state.userConfig.accounts.filter(a => a.id !== id);
+  saveConfig();
+  populateAccountDropdowns();
+  renderSettingsTable();
+}
+
+// ══════════════════════════════════════════════════
+//  ACCOUNT DROPDOWN POPULATION
+// ══════════════════════════════════════════════════
+function populateAccountDropdowns() {
+  const accounts = state.userConfig.accounts;
+
+  ['load-acct-profile', 'cat-acct-profile'].forEach(id => {
+    const sel = document.getElementById(id);
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="" disabled selected>-- Select an account --</option>';
+    accounts.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = `${a.name} *${a.last4}`;
+      sel.appendChild(opt);
+    });
+    if (accounts.find(a => a.id === currentVal)) sel.value = currentVal;
+  });
+
+  const hasAccounts = accounts.length > 0;
+  document.getElementById('load-no-accounts').style.display = hasAccounts ? 'none' : 'block';
+  document.getElementById('cat-no-accounts').style.display = hasAccounts ? 'none' : 'block';
+
+  // If selected account was removed, hide the CSV sections
+  ['load', 'cat'].forEach(prefix => {
+    const sel = document.getElementById(`${prefix}-acct-profile`);
+    if (!sel.value) document.getElementById(`${prefix}-csv-section`).style.display = 'none';
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+loadConfig();
+populateAccountDropdowns();
 
 // ══════════════════════════════════════════════════
 //  EXPOSE PURE FUNCTIONS FOR TESTS
