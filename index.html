@@ -1024,7 +1024,7 @@ function renderCatTable() {
     const hasCat = !!tx.category;
     tr.innerHTML = `
       <td class="td-date">${tx.date}</td>
-      <td class="td-desc" title="${tx.description}">${tx.description}</td>
+      <td class="td-desc" title="${tx.description.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${tx.description}</td>
       <td class="td-amount ${tx.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(tx.amount)}</td>
       <td class="td-cat ${hasCat ? '' : 'cat-error'}">
         <select data-idx="${i}">
