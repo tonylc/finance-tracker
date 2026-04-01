@@ -285,7 +285,7 @@
       <div id="load-csv-section" style="display:none;">
         <h3>CSV Data</h3>
         <p style="font-size:12px;color:#777;margin-bottom:8px;">
-          Required columns in order: <strong>Date, Description, Amount, Category, Fix</strong>. Include the header row.
+          Paste the raw CSV exported from your bank below. Include the header row.
         </p>
         <textarea id="load-csv" rows="8" placeholder="Paste CSV here..."></textarea>
 
@@ -572,37 +572,16 @@ function parseCSVLine(line) {
   return fields;
 }
 
-function validateImport(rows, headerMap, requireCategory) {
+function validateImport(rows, headerMap) {
   // rows: array of field arrays (excluding header row)
   // headerMap: { date, description, amount, category, fix } → column indices
   const errors = [];
   rows.forEach((fields, i) => {
     const rowNum = i + 2; // 1-based, +1 for header
-
-    // date — must be non-blank and parseable as a date
-    const dateVal = (fields[headerMap.date] || '').trim();
-    if (!dateVal)
-      errors.push(`Row ${rowNum}: date is blank`);
-    else if (isNaN(new Date(dateVal).getTime()))
-      errors.push(`Row ${rowNum}: date "${dateVal}" is not a valid date`);
-
-    // description — must be a non-blank string
-    if (!(fields[headerMap.description] || '').trim())
-      errors.push(`Row ${rowNum}: description is blank`);
-
-    // amount — must be non-blank and parse as a finite number
-    const amtRaw = (fields[headerMap.amount] || '').trim();
-    if (!amtRaw)
-      errors.push(`Row ${rowNum}: amount is blank`);
-    else if (!isFinite(parseFloat(amtRaw.replace(/[$,]/g, ''))))
-      errors.push(`Row ${rowNum}: amount "${amtRaw}" is not a valid number`);
-
-    // category
     const cat = (fields[headerMap.category] || '').trim();
-    if (requireCategory && !cat)
-      errors.push(`Row ${rowNum}: category is blank`);
-    if (cat && !VALID_CATS.has(cat))
+    if (cat !== '' && !VALID_CATS.has(cat)) {
       errors.push(`Row ${rowNum}: invalid category "${cat}"`);
+    }
   });
   return { valid: errors.length === 0, errors };
 }
@@ -624,7 +603,7 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
     });
   }
   const missing = ['date', 'description', 'amount'].filter(k => map[k] === undefined);
-  if (missing.length) return { error: `Missing required columns: ${missing.map(k => k[0].toUpperCase() + k.slice(1)).join(', ')}` };
+  if (missing.length) return { error: `Missing required columns: ${missing.join(', ')}` };
   if (map.category === undefined) map.category = -1; // optional
   if (map.fix === undefined) map.fix = -1;           // optional
   return map;
@@ -762,9 +741,6 @@ function switchView(view) {
   if (view === 'settings') renderSettingsTable();
 }
 
-const LOAD_HEADER_MAP = { date: 0, description: 1, amount: 2, category: 3, fix: 4 };
-const LOAD_EXPECTED_HEADERS = ['date', 'description', 'amount', 'category', 'fix'];
-
 // ══════════════════════════════════════════════════
 //  LOAD VIEW
 // ══════════════════════════════════════════════════
@@ -792,14 +768,13 @@ function handleLoadImport() {
   if (!raw.trim()) return showLoadError('Please paste CSV data.');
 
   const rows = parseCSV(raw);
-  if (rows.length < 1) return showLoadError('CSV must have at least one data row.');
+  if (rows.length < 2) return showLoadError('CSV must have a header row and at least one data row.');
 
-  // Skip header row if present (auto-detect by matching expected field names)
-  const firstRowIsHeader = LOAD_EXPECTED_HEADERS.every((f, i) => (rows[0][i] || '').trim().toLowerCase() === f);
-  const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
-  if (dataRows.length < 1) return showLoadError('CSV must have at least one data row.');
+  const headerMap = buildHeaderMap(rows[0], account.inputCsvFormat);
+  if (headerMap.error) return showLoadError(headerMap.error);
 
-  const validation = validateImport(dataRows, LOAD_HEADER_MAP, true);
+  const dataRows = rows.slice(1);
+  const validation = validateImport(dataRows, headerMap);
   if (!validation.valid) {
     showLoadError(`Import rejected — fix the following errors before loading:<ul style="margin-top:6px;padding-left:18px;">${
       validation.errors.map(e => `<li>${e}</li>`).join('')
@@ -808,7 +783,7 @@ function handleLoadImport() {
   }
 
   const accountKey = formatAccountKey(account.name, account.last4);
-  const incoming = dataRows.map(fields => parseTransaction(fields, LOAD_HEADER_MAP, accountKey));
+  const incoming = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
   state.transactions = deduplicateTransactions(state.transactions, incoming);
 
   if (!state.accounts.find(a => a.key === accountKey)) {
@@ -990,17 +965,12 @@ function handleCatImport() {
   if (!raw.trim()) return showCatError('Please paste CSV data.');
 
   const rows = parseCSV(raw);
-  if (rows.length < 1) return showCatError('CSV must have at least one data row.');
-
-  // Skip header row if present (auto-detect: mapped positions match field names)
-  const firstRowIsHeader = account.inputCsvFormat.every((field, i) =>
-    !field || (rows[0][i] || '').trim().toLowerCase() === field.toLowerCase()
-  );
-  const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
-  if (dataRows.length < 1) return showCatError('CSV must have at least one data row.');
+  if (rows.length < 2) return showCatError('CSV must have a header row and at least one data row.');
 
   const headerMap = buildHeaderMap(rows[0], account.inputCsvFormat);
   if (headerMap.error) return showCatError(headerMap.error);
+
+  const dataRows = rows.slice(1);
   const validation = validateImport(dataRows, headerMap);
   if (!validation.valid) {
     showCatImportError(`Import rejected:<ul style="margin-top:6px;padding-left:18px;">${
@@ -1054,7 +1024,7 @@ function renderCatTable() {
     const hasCat = !!tx.category;
     tr.innerHTML = `
       <td class="td-date">${tx.date}</td>
-      <td class="td-desc" title="${tx.description.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${tx.description}</td>
+      <td class="td-desc" title="${tx.description}">${tx.description}</td>
       <td class="td-amount ${tx.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(tx.amount)}</td>
       <td class="td-cat ${hasCat ? '' : 'cat-error'}">
         <select data-idx="${i}">
