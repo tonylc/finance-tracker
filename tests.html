@@ -21,6 +21,11 @@
   .test-err { font-size: 11px; color: #b71c1c; margin-top: 3px; font-family: 'Courier New', monospace; white-space: pre-wrap; }
   .pass-bg { background: #f9fff9; }
   .fail-bg { background: #fff5f5; }
+  .test { cursor: pointer; }
+  .test:hover { filter: brightness(0.97); }
+  .test-toggle { flex-shrink: 0; color: #999; font-size: 11px; line-height: 1.4; user-select: none; }
+  .test-source { display: none; margin-top: 6px; font-size: 11px; font-family: 'Courier New', monospace; background: #1a1a2e; color: #e8e8e8; padding: 8px 12px; border-radius: 4px; white-space: pre; overflow-x: auto; }
+  .test.expanded .test-source { display: block; }
 </style>
 </head>
 <body>
@@ -47,12 +52,17 @@ function suite(name, fn) {
 }
 
 function test(name, fn) {
+  const src = fn.toString();
   try {
     fn();
-    currentSuite.tests.push({ name, pass: true });
+    currentSuite.tests.push({ name, pass: true, src });
   } catch (e) {
-    currentSuite.tests.push({ name, pass: false, err: e.message });
+    currentSuite.tests.push({ name, pass: false, err: e.message, src });
   }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function assert(condition, msg) {
@@ -433,8 +443,14 @@ function renderResults() {
         <div class="test-name">
           ${t.name}
           ${t.err ? `<div class="test-err">${t.err}</div>` : ''}
+          <div class="test-source">${escapeHtml(t.src)}</div>
         </div>
+        <span class="test-toggle">▶</span>
       `;
+      row.addEventListener('click', () => {
+        const expanded = row.classList.toggle('expanded');
+        row.querySelector('.test-toggle').textContent = expanded ? '▼' : '▶';
+      });
       div.appendChild(row);
     });
 
