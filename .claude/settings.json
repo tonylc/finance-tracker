@@ -27,6 +27,39 @@
           }
         ]
       }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p /home/user/finance-tracker/memory && printf '\\n---\\n## %s\\n\\n' \"$(date '+%Y-%m-%d %H:%M')\" >> /home/user/finance-tracker/memory/notes.md && jq -r '.summary // \"\"' >> /home/user/finance-tracker/memory/notes.md",
+            "statusMessage": "Saving session learnings to memory..."
+          }
+        ]
+      },
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p /home/user/finance-tracker/memory && printf '\\n---\\n## %s\\n\\n' \"$(date '+%Y-%m-%d %H:%M')\" >> /home/user/finance-tracker/memory/notes.md && jq -r '.summary // \"\"' >> /home/user/finance-tracker/memory/notes.md",
+            "statusMessage": "Saving session learnings to memory..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notes=$(cat /home/user/finance-tracker/memory/notes.md 2>/dev/null); if [ -n \"$notes\" ]; then jq -n --arg ctx \"Project memory notes:\\n$notes\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$ctx}}'; else echo '{}'; fi",
+            "statusMessage": "Loading project memory..."
+          }
+        ]
+      }
     ]
   }
 }
