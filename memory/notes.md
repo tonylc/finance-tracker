@@ -15,3 +15,8 @@ Always run `node /home/user/finance-tracker/run-tests.js` and confirm all tests 
 After every commit, update `docs/design.md` to reflect current state. Written as a product spec with engineering detail underneath. Commit it alongside the code change or as an immediate follow-up.
 
 **Review before committing:** After drafting design doc changes, show the user the diff (what was added/changed/removed) and get acknowledgment before including it in the commit.
+
+---
+## 2026-04-04 13:42
+
+
