@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-04  
+> **Last updated:** 2026-04-04 (buildHeaderMap error message capitalization fix)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -188,7 +188,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `formatAccountKey` | `(name, last4) → string` | Returns `"Name *last4"`. |
-| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount, category, fix }` where `category` and `fix` default to `-1` if absent. Returns `{ error }` if a required field is missing. |
+| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount, category, fix }` where `category` and `fix` default to `-1` if absent. Returns `{ error: "Missing required columns: Date, Description, ..." }` (capitalized) if a required field is missing. |
 | `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. Optionally checks category. Returns error strings with 1-based row numbers. |
 | `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. Strips `$` and commas from amount. Assigns UUID. |
 | `deduplicateTransactions` | `(existing: Transaction[], incoming: Transaction[]) → Transaction[]` | Merges arrays; skips incoming entries that match an existing `accountKey|date|description|amount` key. |
