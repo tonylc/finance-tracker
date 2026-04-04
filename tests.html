@@ -240,6 +240,16 @@ function runTests() {
       const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
       assertEqual(t.category, '');
     });
+
+    test('normalizes slash-delimited date to ISO format', () => {
+      const t = parseTransaction(['2026/1/1', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-01-01');
+    });
+
+    test('zero-pads single-digit month and day in slash date', () => {
+      const t = parseTransaction(['2026/3/5', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-03-05');
+    });
   });
 
   // ── deduplicateTransactions ───────────────────────────────────────────────
