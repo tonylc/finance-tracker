@@ -649,7 +649,7 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
     });
   }
   const missing = ['date', 'description', 'amount'].filter(k => map[k] === undefined);
-  if (missing.length) return { error: `Missing required columns: ${missing.join(', ')}` };
+  if (missing.length) return { error: `Missing required columns: ${missing.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(', ')}` };
   if (map.category === undefined) map.category = -1; // optional
   if (map.fix === undefined) map.fix = -1;           // optional
   return map;
