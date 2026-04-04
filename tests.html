@@ -21,6 +21,11 @@
   .test-err { font-size: 11px; color: #b71c1c; margin-top: 3px; font-family: 'Courier New', monospace; white-space: pre-wrap; }
   .pass-bg { background: #f9fff9; }
   .fail-bg { background: #fff5f5; }
+  .test { cursor: pointer; }
+  .test:hover { filter: brightness(0.97); }
+  .test-toggle { flex-shrink: 0; color: #999; font-size: 11px; line-height: 1.4; user-select: none; }
+  .test-source { display: none; margin-top: 6px; font-size: 11px; font-family: 'Courier New', monospace; background: #1a1a2e; color: #e8e8e8; padding: 8px 12px; border-radius: 4px; white-space: pre; overflow-x: auto; }
+  .test.expanded .test-source { display: block; }
 </style>
 </head>
 <body>
@@ -47,12 +52,17 @@ function suite(name, fn) {
 }
 
 function test(name, fn) {
+  const src = fn.toString();
   try {
     fn();
-    currentSuite.tests.push({ name, pass: true });
+    currentSuite.tests.push({ name, pass: true, src });
   } catch (e) {
-    currentSuite.tests.push({ name, pass: false, err: e.message });
+    currentSuite.tests.push({ name, pass: false, err: e.message, src });
   }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function assert(condition, msg) {
@@ -75,7 +85,7 @@ function runTests() {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
     parseTransaction, deduplicateTransactions, filterByMonth,
     aggregateByCategory, totalSpend, cycleCategoryByKey,
-    validateExport, toCSV, ALL_SUBS, VALID_CATS,
+    validateExport, toCSV, getMonthList, ALL_SUBS, VALID_CATS,
   } = lib;
 
   // ── parseCSV ──────────────────────────────────────────────────────────────
@@ -230,6 +240,16 @@ function runTests() {
       const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
       assertEqual(t.category, '');
     });
+
+    test('normalizes slash-delimited date to ISO format', () => {
+      const t = parseTransaction(['2026/1/1', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-01-01');
+    });
+
+    test('zero-pads single-digit month and day in slash date', () => {
+      const t = parseTransaction(['2026/3/5', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-03-05');
+    });
   });
 
   // ── deduplicateTransactions ───────────────────────────────────────────────
@@ -264,18 +284,18 @@ function runTests() {
     ];
 
     test('includes both boundary dates of a month', () => {
-      const r = filterByMonth(txs, 2025, 0); // January (month 0)
+      const r = filterByMonth(txs, 2025, 1); // January
       assertEqual(r.length, 2);
     });
 
     test('excludes other months', () => {
-      const r = filterByMonth(txs, 2025, 1); // February
+      const r = filterByMonth(txs, 2025, 2); // February
       assertEqual(r.length, 1);
       assertEqual(r[0].amount, -30);
     });
 
     test('returns empty for month with no transactions', () => {
-      const r = filterByMonth(txs, 2025, 5); // June
+      const r = filterByMonth(txs, 2025, 6); // June
       assertEqual(r.length, 0);
     });
   });
@@ -324,7 +344,7 @@ function runTests() {
 
   // ── cycleCategoryByKey ────────────────────────────────────────────────────
   suite('cycleCategoryByKey', () => {
-    test("'g' key cycles Gas → Groceries → General Merchandise → wraps", () => {
+    test("'g' key cycles Gas → Groceries → General Merchandise → Gifts → wraps", () => {
       const r1 = cycleCategoryByKey('', 'g', ALL_SUBS);
       assertEqual(r1, 'Gas / EV Charging');
       const r2 = cycleCategoryByKey('Gas / EV Charging', 'g', ALL_SUBS);
@@ -332,7 +352,9 @@ function runTests() {
       const r3 = cycleCategoryByKey('Groceries', 'g', ALL_SUBS);
       assertEqual(r3, 'General Merchandise');
       const r4 = cycleCategoryByKey('General Merchandise', 'g', ALL_SUBS);
-      assertEqual(r4, 'Gas / EV Charging');
+      assertEqual(r4, 'Gifts');
+      const r5 = cycleCategoryByKey('Gifts', 'g', ALL_SUBS);
+      assertEqual(r5, 'Gas / EV Charging');
     });
 
     test("'r' key cycles to Restaurants", () => {
@@ -400,6 +422,35 @@ function runTests() {
     });
   });
 
+  // ── getMonthList ──────────────────────────────────────────────────────────
+  suite('getMonthList', () => {
+    const tx = (date) => ({ date, amount: 10, category: 'Groceries', description: 'x', id: date, accountKey: 'a', fix: false });
+
+    test('given transactions in multiple months, returns them sorted chronologically', () => {
+      const result = getMonthList([tx('2025-03-15'), tx('2025-01-10')]);
+      assertEqual(result, [{ year: 2025, month: 1 }, { year: 2025, month: 3 }]);
+    });
+
+    test('given multiple transactions in the same month, aggregates into a single month entry', () => {
+      const result = getMonthList([tx('2025-03-01'), tx('2025-03-28')]);
+      assertEqual(result, [{ year: 2025, month: 3 }]);
+    });
+
+    test('given a transaction with no date, skips it', () => {
+      const result = getMonthList([{ date: '', amount: 10, category: 'Groceries', description: 'x', id: '1', accountKey: 'a', fix: false }, tx('2025-05-10')]);
+      assertEqual(result, [{ year: 2025, month: 5 }]);
+    });
+
+    test('given transactions spanning two years, sorts across year boundary correctly', () => {
+      const result = getMonthList([tx('2025-01-10'), tx('2024-12-31')]);
+      assertEqual(result, [{ year: 2024, month: 12 }, { year: 2025, month: 1 }]);
+    });
+
+    test('given no transactions, returns empty array', () => {
+      assertEqual(getMonthList([]), []);
+    });
+  });
+
   // ── Render results ────────────────────────────────────────────────────────
   renderResults();
 }
@@ -431,8 +482,14 @@ function renderResults() {
         <div class="test-name">
           ${t.name}
           ${t.err ? `<div class="test-err">${t.err}</div>` : ''}
+          <div class="test-source">${escapeHtml(t.src)}</div>
         </div>
+        <span class="test-toggle">▶</span>
       `;
+      row.addEventListener('click', () => {
+        const expanded = row.classList.toggle('expanded');
+        row.querySelector('.test-toggle').textContent = expanded ? '▼' : '▶';
+      });
       div.appendChild(row);
     });
 
