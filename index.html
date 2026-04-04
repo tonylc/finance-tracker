@@ -176,7 +176,7 @@
   #budget-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
   .budget-bar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
   .budget-bar-row:hover .budget-bar-fill { filter: brightness(0.88); }
-  .budget-bar-label { width: 130px; font-size: 13px; text-align: right; flex-shrink: 0; }
+  .budget-bar-label { width: 150px; font-size: 13px; text-align: right; flex-shrink: 0; }
   .budget-bar-track { flex: 1; background: #f0f0f0; border-radius: 4px; height: 22px; overflow: hidden; }
   .budget-bar-fill { height: 100%; border-radius: 4px; background: #5c6bc0; transition: width .3s; }
   .budget-bar-fill.neg-bar { background: #43a047; }
@@ -254,6 +254,50 @@
   .mt-20 { margin-top: 20px; }
   .flex-between { display: flex; justify-content: space-between; align-items: center; }
   .row-error-indicator { color: #e53935; font-weight: 700; font-size: 11px; margin-left: 4px; }
+
+  /* ── Budget bar subcategory label ── */
+  .budget-bar-sub { font-size: 13px; }
+  .budget-bar-parent { font-size: 10px; color: #999; margin-top: 1px; }
+
+  /* ── Bulk edit bar ── */
+  #cat-bulk-bar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #e8eaf6;
+    border: 1px solid #c5cae9;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  #cat-bulk-bar.visible { display: flex; }
+  #cat-bulk-bar select { width: auto; min-width: 180px; }
+  #cat-bulk-count { font-size: 13px; font-weight: 600; color: #3949ab; white-space: nowrap; }
+  .td-check { width: 32px; text-align: center; }
+  tr.row-selected td { background: #e8eaf6 !important; }
+
+  /* ── Mobile ── */
+  @media (max-width: 600px) {
+    main { padding: 16px 10px; }
+    .card { padding: 14px 12px; }
+    header { padding: 0 12px; gap: 12px; height: 48px; }
+    header .brand { font-size: 14px; }
+    nav button { padding: 5px 10px; font-size: 12px; }
+    h2 { font-size: 16px; }
+    .budget-bar-label { width: 90px; font-size: 12px; }
+    .budget-bar-sub { font-size: 12px; }
+    .budget-bar-count { display: none; }
+    .budget-bar-amount { width: 68px; font-size: 12px; }
+    #budget-month-heading { font-size: 17px; }
+    .total-banner { gap: 16px; padding: 12px 14px; }
+    .total-banner .stat-value { font-size: 18px; }
+    .td-desc { max-width: 110px; }
+    .td-cat select { min-width: 130px; }
+    #cat-bulk-bar select { min-width: 130px; }
+    .form-row { flex-wrap: wrap; }
+    .form-row .field-sm { flex: 1 1 100%; }
+  }
 
   /* ── Settings view ── */
   .col-mapping-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
@@ -434,10 +478,20 @@
 
         <div id="cat-export-error" style="display:none;"></div>
 
+        <div id="cat-bulk-bar">
+          <span id="cat-bulk-count">0 selected</span>
+          <select id="cat-bulk-cat">
+            <option value="">-- Set category --</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="cat-bulk-apply">Apply to selected</button>
+          <button class="btn btn-sm" style="background:#fff;border:1px solid #ccc;" id="cat-bulk-clear">Clear selection</button>
+        </div>
+
         <div style="overflow-x:auto;">
           <table>
             <thead>
               <tr>
+                <th class="td-check"><input type="checkbox" id="cat-select-all" title="Select all"></th>
                 <th>Date</th>
                 <th>Description</th>
                 <th style="text-align:right;">Amount</th>
@@ -908,6 +962,7 @@ function renderLoadSummary() {
 // ══════════════════════════════════════════════════
 let budgetMonths = [];
 let budgetIdx = 0;
+let selectedIdxs = new Set();
 
 document.getElementById('budget-prev').addEventListener('click', () => {
   if (budgetIdx > 0) { budgetIdx--; renderBudgetMonth(); }
@@ -965,34 +1020,35 @@ function renderBudgetMonth() {
   document.getElementById('budget-chart-panel').style.display = 'block';
   document.getElementById('budget-detail-panel').style.display = 'none';
 
-  // Build list sorted by |total| desc
+  // Build subcategory bars sorted by |total| desc
   const cats = CAT_LIST
-    .filter(({ parent }) => groups[parent])
-    .map(({ parent }) => {
-      const parentData = groups[parent];
-      const total = Object.values(parentData).reduce((s, v) => s + v.total, 0);
-      const count = Object.values(parentData).reduce((s, v) => s + v.count, 0);
-      return { parent, total, count };
-    })
+    .flatMap(({ parent, subs }) =>
+      subs
+        .filter(sub => groups[parent]?.[sub])
+        .map(sub => ({ sub, parent, ...groups[parent][sub] }))
+    )
     .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
 
   const maxAbs = cats.reduce((m, c) => Math.max(m, Math.abs(c.total)), 0) || 1;
 
   const barsEl = document.getElementById('budget-bars');
   barsEl.innerHTML = '';
-  cats.forEach(({ parent, total, count }) => {
+  cats.forEach(({ sub, parent, total, count }) => {
     const pct = (Math.abs(total) / maxAbs * 100).toFixed(1);
     const row = document.createElement('div');
     row.className = 'budget-bar-row';
     row.innerHTML = `
-      <div class="budget-bar-label">${parent}</div>
+      <div class="budget-bar-label">
+        <div class="budget-bar-sub">${sub}</div>
+        <div class="budget-bar-parent">${parent}</div>
+      </div>
       <div class="budget-bar-track">
         <div class="budget-bar-fill${total < 0 ? ' neg-bar' : ''}" style="width:${pct}%"></div>
       </div>
       <div class="budget-bar-amount ${total < 0 ? 'neg' : 'pos'}">${fmtAmount(total)}</div>
       <div class="budget-bar-count">${count} tx</div>
     `;
-    row.addEventListener('click', () => showCategoryDetail(parent, monthTx));
+    row.addEventListener('click', () => showCategoryDetail(sub, monthTx));
     barsEl.appendChild(row);
   });
 
@@ -1013,13 +1069,13 @@ function renderBudgetMonth() {
   });
 }
 
-function showCategoryDetail(parent, monthTx) {
+function showCategoryDetail(sub, monthTx) {
   document.getElementById('budget-chart-panel').style.display = 'none';
   document.getElementById('budget-detail-panel').style.display = 'block';
-  document.getElementById('budget-detail-title').textContent = parent;
+  document.getElementById('budget-detail-title').textContent = sub;
 
   const txs = monthTx
-    .filter(t => SUB_TO_PARENT[t.category] === parent)
+    .filter(t => t.category === sub)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const tbody = document.getElementById('budget-detail-tbody');
@@ -1090,6 +1146,7 @@ function handleCatImport() {
 
   const accountKey = formatAccountKey(account.name, account.last4);
   state.catSession = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
+  selectedIdxs.clear();
 
   renderCatTable();
   document.getElementById('cat-review').style.display = 'block';
@@ -1126,12 +1183,30 @@ function renderCatTable() {
   const tbody = document.getElementById('cat-tbody');
   tbody.innerHTML = '';
 
+  // Populate bulk category dropdown once
+  const bulkCat = document.getElementById('cat-bulk-cat');
+  if (bulkCat.options.length === 1) { // only the placeholder
+    CAT_LIST.forEach(({ parent, subs }) => {
+      const grp = document.createElement('optgroup');
+      grp.label = parent;
+      subs.forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub;
+        opt.textContent = sub;
+        grp.appendChild(opt);
+      });
+      bulkCat.appendChild(grp);
+    });
+  }
+
   state.catSession.forEach((tx, i) => {
     const tr = document.createElement('tr');
     tr.dataset.idx = i;
+    if (selectedIdxs.has(i)) tr.classList.add('row-selected');
 
     const hasCat = !!tx.category;
     tr.innerHTML = `
+      <td class="td-check"><input type="checkbox" class="row-sel" data-idx="${i}" ${selectedIdxs.has(i) ? 'checked' : ''}></td>
       <td class="td-date">${tx.date}</td>
       <td class="td-desc" title="${tx.description.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${tx.description}</td>
       <td class="td-amount ${tx.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(tx.amount)}</td>
@@ -1173,8 +1248,19 @@ function renderCatTable() {
     });
   });
 
+  // Row selection checkboxes
+  tbody.querySelectorAll('.row-sel').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      if (e.target.checked) selectedIdxs.add(idx);
+      else selectedIdxs.delete(idx);
+      e.target.closest('tr').classList.toggle('row-selected', e.target.checked);
+      updateBulkBar();
+    });
+  });
+
   // Fix checkbox handlers
-  tbody.querySelectorAll('input[type=checkbox]').forEach(cb => {
+  tbody.querySelectorAll('input[data-field=fix]').forEach(cb => {
     cb.addEventListener('change', e => {
       const idx = parseInt(e.target.dataset.idx);
       state.catSession[idx].fix = e.target.checked;
@@ -1182,16 +1268,48 @@ function renderCatTable() {
   });
 
   updateCatProgress();
+  updateBulkBar();
 }
 
 function updateCatProgress() {
   const total = state.catSession.length;
   const done = state.catSession.filter(t => t.category).length;
   document.getElementById('cat-progress').textContent = `${done} / ${total} categorized`;
-  const allDone = done === total;
-  document.getElementById('cat-export-btn').disabled = false; // always enabled, validate on click
+  document.getElementById('cat-export-btn').disabled = false;
   document.getElementById('cat-export-error').style.display = 'none';
 }
+
+function updateBulkBar() {
+  const bar = document.getElementById('cat-bulk-bar');
+  const n = selectedIdxs.size;
+  bar.classList.toggle('visible', n > 0);
+  document.getElementById('cat-bulk-count').textContent = `${n} selected`;
+  const allSel = state.catSession.length > 0 && n === state.catSession.length;
+  const selAll = document.getElementById('cat-select-all');
+  if (selAll) selAll.checked = allSel;
+}
+
+document.getElementById('cat-select-all').addEventListener('change', e => {
+  if (e.target.checked) {
+    state.catSession.forEach((_, i) => selectedIdxs.add(i));
+  } else {
+    selectedIdxs.clear();
+  }
+  renderCatTable();
+});
+
+document.getElementById('cat-bulk-apply').addEventListener('click', () => {
+  const cat = document.getElementById('cat-bulk-cat').value;
+  if (!cat) return;
+  selectedIdxs.forEach(i => { state.catSession[i].category = cat; });
+  selectedIdxs.clear();
+  renderCatTable();
+});
+
+document.getElementById('cat-bulk-clear').addEventListener('click', () => {
+  selectedIdxs.clear();
+  renderCatTable();
+});
 
 function handleCatExport() {
   const validation = validateExport(state.catSession);

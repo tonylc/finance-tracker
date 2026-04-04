@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-04 (parseTransaction: normalize slash-format dates to ISO)  
+> **Last updated:** 2026-04-04 (mobile responsive + subcategory bars + bulk categorize edit)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -62,7 +62,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 1. Navigate to Budget. If no transactions are loaded, an empty state is shown.
 2. The most recent month with transactions is displayed by default, shown as a large heading (e.g. "April 2025").
 3. Use **←** / **→** arrows to navigate months. Both the heading and bar chart update.
-4. The bar chart shows one bar per parent category, sorted by absolute spend descending.
+4. The bar chart shows one bar per subcategory (e.g. Groceries, Gas / EV Charging), sorted by absolute spend descending.
 5. A full transaction list for the current month (all categories, sorted by date) is shown below the bar chart.
 6. Click any bar to open the detail panel listing every transaction in that category for the month.
 7. Click **← All Categories** to return to the bar chart and transaction list.
@@ -73,7 +73,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **Month filtering:** `filterByMonth(transactions, year, month)` filters the full transaction list to a single calendar month. Month is 1-based. Implementation: `d.getMonth() + 1 === month`.
 
-**Bar chart rendering:** Categories are derived from `CAT_LIST` filtered to parents that have at least one transaction in the month. Each parent's total and count are summed across its subcategories. Bars are scaled relative to the largest absolute value (100% width = max spend). Bars are sorted by `|total|` descending.
+**Bar chart rendering:** Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
 
 **Bar colors:**
 - `#43a047` (green) — negative total (expense / money leaving)
@@ -83,7 +83,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date ascending. Shown below the bar chart. Columns: date, description, category, account, amount.
 
-**Detail panel:** Transactions are filtered to `SUB_TO_PARENT[t.category] === parent`, then sorted by date ascending.
+**Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then sorted by date ascending.
 
 **Uncategorized warning:** Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. A yellow warning banner is shown if any exist in the current month.
 
@@ -97,23 +97,37 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **User flow:**
 1. Select an account profile and paste a bank CSV (same as Load).
-2. A table renders with one row per transaction: date, description, amount, category dropdown, fix checkbox.
+2. A table renders with one row per transaction: checkbox, date, description, amount, category dropdown, fix checkbox.
 3. Assign categories using the dropdowns or the keyboard shortcut (single letter key cycles matching categories).
-4. When all rows are categorized, click **Export CSV** to generate a CSV ready to import in Load.
+4. Select multiple rows using the checkboxes; a bulk-action bar appears to apply one category to all selected rows at once.
+5. When all rows are categorized, click **Export CSV** to generate a CSV ready to import in Load.
 
 **Engineering details:**
 
 - `state.catSession[]` holds the working rows for the current Categorize session. It is independent of `state.transactions`.
 - Category dropdowns are `<select>` elements with `<optgroup>` per parent category. The full list of subcategories comes from `CAT_LIST`.
 - **Keyboard cycling:** A `keydown` listener on each category select calls `cycleCategoryByKey(currentValue, key, ALL_SUBS)`. The function finds all subcategories whose name starts with the pressed letter (case-insensitive), then advances to the next match after the current selection, wrapping around.
-- Rows with no category assigned are highlighted with `.cat-error` (red background).
+- **Bulk edit:** Row selection is tracked in `selectedIdxs` (a module-level `Set<number>`). When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, category dropdown, Apply, and Clear. Apply sets the chosen category on all selected rows and clears `selectedIdxs`. The set is cleared on each new import load. A "select all" checkbox in the thead selects/deselects all rows.
+- Rows with no category assigned are highlighted with `.cat-error` (red border on the select). Selected rows are highlighted with `.row-selected` (blue-tinted background).
 - `validateExport()` blocks export if any row has a blank category, returning the invalid row indices.
 - The exported CSV format: `Date,Description,Amount,Category,Fix` — identical to what Load expects.
 - `toCSV()` handles quoting of fields containing commas, quotes, or newlines.
 
 ---
 
-### 2.4 Settings
+### 2.4 Responsive Design
+
+All views are mobile-friendly via a `@media (max-width: 600px)` block. Key adaptations:
+- Reduced card, main, and header padding.
+- Budget bar labels narrowed to 90px; bar count column hidden.
+- `#budget-month-heading` reduced from 22px to 17px.
+- Tables wrapped in `overflow-x: auto` to prevent horizontal overflow.
+- `.form-row` wraps on small screens.
+- The viewport meta tag (`width=device-width, initial-scale=1`) is present in `<head>`.
+
+---
+
+### 2.5 Settings
 
 **Purpose:** Configure one or more bank account profiles, each describing how to parse that bank's CSV format.
 
