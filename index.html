@@ -172,6 +172,18 @@
   }
   .month-nav button:hover { background: #f0f0f0; }
   .month-nav button:disabled { opacity: .3; cursor: not-allowed; }
+  /* ── Budget bar chart ── */
+  #budget-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+  .budget-bar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .budget-bar-row:hover .budget-bar-fill { filter: brightness(0.88); }
+  .budget-bar-label { width: 130px; font-size: 13px; text-align: right; flex-shrink: 0; }
+  .budget-bar-track { flex: 1; background: #f0f0f0; border-radius: 4px; height: 22px; overflow: hidden; }
+  .budget-bar-fill { height: 100%; border-radius: 4px; background: #5c6bc0; transition: width .3s; }
+  .budget-bar-fill.neg-bar { background: #43a047; }
+  .budget-bar-amount { width: 90px; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+  .budget-bar-count { width: 50px; font-size: 11px; color: #888; flex-shrink: 0; }
+  .btn-secondary { background:#fff; border:1px solid #ccc; border-radius:4px; padding:4px 10px; cursor:pointer; font-size:13px; }
+  .btn-secondary:hover { background:#f0f0f0; }
   #budget-month-label { font-size: 16px; font-weight: 700; min-width: 120px; text-align: center; }
 
   .total-banner {
@@ -339,16 +351,29 @@
 
         <div id="budget-warn" style="display:none;"></div>
 
-        <table class="budget-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th style="text-align:right;">Amount</th>
-              <th style="text-align:right;"># Transactions</th>
-            </tr>
-          </thead>
-          <tbody id="budget-tbody"></tbody>
-        </table>
+        <!-- Bar chart panel (default view) -->
+        <div id="budget-chart-panel">
+          <div id="budget-bars"></div>
+        </div>
+
+        <!-- Category drill-down panel (hidden until a bar is clicked) -->
+        <div id="budget-detail-panel" style="display:none;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <button id="budget-back-btn" class="btn-secondary">&#8592; All Categories</button>
+            <span id="budget-detail-title" style="font-weight:700;font-size:15px;"></span>
+          </div>
+          <table class="budget-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Account</th>
+                <th style="text-align:right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="budget-detail-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -871,6 +896,10 @@ document.getElementById('budget-prev').addEventListener('click', () => {
 document.getElementById('budget-next').addEventListener('click', () => {
   if (budgetIdx < budgetMonths.length - 1) { budgetIdx++; renderBudgetMonth(); }
 });
+document.getElementById('budget-back-btn').addEventListener('click', () => {
+  document.getElementById('budget-chart-panel').style.display = 'block';
+  document.getElementById('budget-detail-panel').style.display = 'none';
+});
 
 function renderBudget() {
   const hasData = state.transactions.length > 0;
@@ -892,7 +921,7 @@ function renderBudget() {
 function renderBudgetMonth() {
   if (!budgetMonths.length) return;
   const { year, month } = budgetMonths[budgetIdx];
-  document.getElementById('budget-month-label').textContent = `${MONTH_NAMES[month]} ${year}`;
+  document.getElementById('budget-month-label').textContent = `${MONTH_NAMES[month - 1]} ${year}`;
   document.getElementById('budget-prev').disabled = budgetIdx === 0;
   document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
 
@@ -911,50 +940,63 @@ function renderBudgetMonth() {
   const { groups, grandTotal } = aggregateByCategory(monthTx);
   document.getElementById('budget-month-total').textContent = `Month total: ${fmtAmount(grandTotal)}`;
 
-  const tbody = document.getElementById('budget-tbody');
-  tbody.innerHTML = '';
+  // Show chart panel, hide detail panel
+  document.getElementById('budget-chart-panel').style.display = 'block';
+  document.getElementById('budget-detail-panel').style.display = 'none';
 
-  CAT_LIST.forEach(({ parent, subs }) => {
-    // Only show parents that have data this month
-    const parentData = groups[parent];
-    if (!parentData) return;
+  // Build list sorted by |total| desc
+  const cats = CAT_LIST
+    .filter(({ parent }) => groups[parent])
+    .map(({ parent }) => {
+      const parentData = groups[parent];
+      const total = Object.values(parentData).reduce((s, v) => s + v.total, 0);
+      const count = Object.values(parentData).reduce((s, v) => s + v.count, 0);
+      return { parent, total, count };
+    })
+    .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
 
-    const parentTotal = Object.values(parentData).reduce((s, v) => s + v.total, 0);
-    const parentCount = Object.values(parentData).reduce((s, v) => s + v.count, 0);
+  const maxAbs = cats.reduce((m, c) => Math.max(m, Math.abs(c.total)), 0) || 1;
 
-    const pRow = document.createElement('tr');
-    pRow.className = 'parent-row';
-    pRow.innerHTML = `
-      <td>${parent}</td>
-      <td class="td-amount ${parentTotal < 0 ? 'neg' : 'pos'}">${fmtAmount(parentTotal)}</td>
-      <td style="text-align:right;">${parentCount}</td>
+  const barsEl = document.getElementById('budget-bars');
+  barsEl.innerHTML = '';
+  cats.forEach(({ parent, total, count }) => {
+    const pct = (Math.abs(total) / maxAbs * 100).toFixed(1);
+    const row = document.createElement('div');
+    row.className = 'budget-bar-row';
+    row.innerHTML = `
+      <div class="budget-bar-label">${parent}</div>
+      <div class="budget-bar-track">
+        <div class="budget-bar-fill${total < 0 ? ' neg-bar' : ''}" style="width:${pct}%"></div>
+      </div>
+      <div class="budget-bar-amount ${total < 0 ? 'neg' : 'pos'}">${fmtAmount(total)}</div>
+      <div class="budget-bar-count">${count} tx</div>
     `;
-    tbody.appendChild(pRow);
-
-    subs.forEach(sub => {
-      if (!parentData[sub]) return;
-      const { total, count } = parentData[sub];
-      const sRow = document.createElement('tr');
-      sRow.className = 'sub-row';
-      sRow.innerHTML = `
-        <td>${sub}</td>
-        <td class="td-amount ${total < 0 ? 'neg' : 'pos'}">${fmtAmount(total)}</td>
-        <td style="text-align:right;">${count}</td>
-      `;
-      tbody.appendChild(sRow);
-    });
+    row.addEventListener('click', () => showCategoryDetail(parent, monthTx));
+    barsEl.appendChild(row);
   });
+}
 
-  // Grand total row
-  const tRow = document.createElement('tr');
-  tRow.className = 'total-row';
-  const totalTx = monthTx.filter(t => t.category).length;
-  tRow.innerHTML = `
-    <td>TOTAL</td>
-    <td class="td-amount">${fmtAmount(grandTotal)}</td>
-    <td style="text-align:right;">${totalTx}</td>
-  `;
-  tbody.appendChild(tRow);
+function showCategoryDetail(parent, monthTx) {
+  document.getElementById('budget-chart-panel').style.display = 'none';
+  document.getElementById('budget-detail-panel').style.display = 'block';
+  document.getElementById('budget-detail-title').textContent = parent;
+
+  const txs = monthTx
+    .filter(t => SUB_TO_PARENT[t.category] === parent)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const tbody = document.getElementById('budget-detail-tbody');
+  tbody.innerHTML = '';
+  txs.forEach(t => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${t.date}</td>
+      <td>${t.description}</td>
+      <td style="font-size:11px;color:#888;">${t.accountKey}</td>
+      <td class="td-amount ${t.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(t.amount)}</td>
+    `;
+    tbody.appendChild(row);
+  });
 }
 
 // ══════════════════════════════════════════════════
@@ -1371,7 +1413,7 @@ populateAccountDropdowns();
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, aggregateByCategory,
-  totalSpend, cycleCategoryByKey, validateExport, toCSV,
+  totalSpend, cycleCategoryByKey, validateExport, toCSV, getMonthList,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
 </script>

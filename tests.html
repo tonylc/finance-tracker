@@ -412,6 +412,35 @@ function runTests() {
     });
   });
 
+  // ── getMonthList ──────────────────────────────────────────────────────────
+  suite('getMonthList', () => {
+    const tx = (date) => ({ date, amount: 10, category: 'Groceries', description: 'x', id: date, accountKey: 'a', fix: false });
+
+    test('given transactions in multiple months, returns them sorted chronologically', () => {
+      const result = getMonthList([tx('2025-03-15'), tx('2025-01-10')]);
+      assertEqual(result, [{ year: 2025, month: 1 }, { year: 2025, month: 3 }]);
+    });
+
+    test('given multiple transactions in the same month, aggregates into a single month entry', () => {
+      const result = getMonthList([tx('2025-03-01'), tx('2025-03-28')]);
+      assertEqual(result, [{ year: 2025, month: 3 }]);
+    });
+
+    test('given a transaction with no date, skips it', () => {
+      const result = getMonthList([{ date: '', amount: 10, category: 'Groceries', description: 'x', id: '1', accountKey: 'a', fix: false }, tx('2025-05-10')]);
+      assertEqual(result, [{ year: 2025, month: 5 }]);
+    });
+
+    test('given transactions spanning two years, sorts across year boundary correctly', () => {
+      const result = getMonthList([tx('2025-01-10'), tx('2024-12-31')]);
+      assertEqual(result, [{ year: 2024, month: 12 }, { year: 2025, month: 1 }]);
+    });
+
+    test('given no transactions, returns empty array', () => {
+      assertEqual(getMonthList([]), []);
+    });
+  });
+
   // ── Render results ────────────────────────────────────────────────────────
   renderResults();
 }
