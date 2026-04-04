@@ -1253,6 +1253,7 @@ function renderCatTable() {
           sel.closest('td').classList.remove('cat-error');
           updateCatProgress();
         }
+        sel.blur(); // close native dropdown so next key press cycles correctly
       }
     });
   });
@@ -1344,6 +1345,16 @@ document.getElementById('cat-bulk-clear').addEventListener('click', () => {
   renderCatTable();
 });
 
+document.getElementById('cat-bulk-cat').addEventListener('keydown', e => {
+  if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    const sel = e.currentTarget;
+    const next = cycleCategoryByKey(sel.value, e.key, ALL_SUBS);
+    sel.value = next;
+    sel.blur(); // close native dropdown so next key press cycles correctly
+  }
+});
+
 function setCatFocus(idx) {
   const tbody = document.getElementById('cat-tbody');
   if (!tbody) return;
@@ -1360,7 +1371,7 @@ function setCatFocus(idx) {
 }
 
 document.addEventListener('keydown', e => {
-  if (!multiSelectMode || currentView !== 'categorize') return;
+  if (currentView !== 'categorize') return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -1374,6 +1385,7 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     setCatFocus(focusedIdx <= 0 ? 0 : focusedIdx - 1);
   } else if (e.key === 'x') {
+    if (!multiSelectMode) return;
     if (focusedIdx < 0) return;
     e.preventDefault();
     const tbody = document.getElementById('cat-tbody');
