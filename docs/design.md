@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-04 (budget banner shows month-specific stats)  
+> **Last updated:** 2026-04-04 (categorize keyboard improvements)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -108,9 +108,9 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 - `state.catSession[]` holds the working rows for the current Categorize session. It is independent of `state.transactions`.
 - Category dropdowns are `<select>` elements with `<optgroup>` per parent category. The full list of subcategories comes from `CAT_LIST`.
-- **Keyboard cycling:** A `keydown` listener on each category select calls `cycleCategoryByKey(currentValue, key, ALL_SUBS)`. The function finds all subcategories whose name starts with the pressed letter (case-insensitive), then advances to the next match after the current selection, wrapping around.
+- **Keyboard cycling:** A `keydown` listener on each category select calls `cycleCategoryByKey(currentValue, key, ALL_SUBS)`. The function finds all subcategories whose name starts with the pressed letter (case-insensitive), then advances to the next match after the current selection, wrapping around. `sel.blur()` is called after every cycle to close the native dropdown, ensuring subsequent keypresses continue cycling via `cycleCategoryByKey` rather than being captured by the browser's native list-navigation. The bulk-assign select (`#cat-bulk-cat`) has the same keydown cycling behavior.
 - **Bulk edit:** Checkboxes are hidden by default. A `☐ Multi-select` toggle button sits above the table (right-aligned); clicking it shows the checkbox column (`table.multi-select-active .td-check { display: table-cell }`) and the button becomes `☑ Multi-select` (blue tint). Row selection is tracked in `selectedIdxs` (a module-level `Set<number>`); `multiSelectMode` (boolean) tracks whether the column is visible. When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, category dropdown, Apply and Clear. Apply sets the chosen category on all selected rows and clears selection. Turning off multi-select or loading a new import clears selection and hides the column.
-- **Keyboard navigation (multi-select mode only):** When multi-select is active and no input/select has focus, `j` moves the cursor down, `k` moves it up, `x` toggles selection on the focused row. The focused row is highlighted with a purple tint and left border (`tr.row-focused`). `setCatFocus(idx)` updates the cursor and scrolls the row into view without a full table re-render. `focusedIdx` resets to `-1` when multi-select is turned off or a new import is loaded.
+- **Keyboard navigation:** On the Categorize page, `j` and `k` always move the focus cursor down/up regardless of whether multi-select mode is active. If no row has focus yet, the first row is focused. `x` toggles row selection but only when multi-select is active. No input/select/textarea may have focus for these keys to fire. The focused row is highlighted with a purple tint and left border (`tr.row-focused`). `setCatFocus(idx)` updates the cursor and scrolls the row into view without a full table re-render. `focusedIdx` resets to `-1` when multi-select is turned off or a new import is loaded.
 - Rows with no category assigned are highlighted with `.cat-error` (red border on the select). Selected rows are highlighted with `.row-selected` (blue-tinted background). Focused row: `.row-focused` (purple tint + left border).
 - `validateExport()` blocks export if any row has a blank category, returning the invalid row indices.
 - The exported CSV format: `Date,Description,Amount,Category,Fix` — identical to what Load expects.
