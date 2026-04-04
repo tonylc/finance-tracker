@@ -277,6 +277,7 @@
   .td-check { width: 32px; text-align: center; display: none; }
   table.multi-select-active .td-check { display: table-cell; }
   tr.row-selected td { background: #e8eaf6 !important; }
+  tr.row-focused td { background: #ede7f6 !important; box-shadow: inset 3px 0 0 #7c4dff; }
   #cat-multiselect-btn { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; color: #555; }
   #cat-multiselect-btn.active { background: #e8eaf6; border-color: #5c6bc0; color: #3949ab; font-weight: 600; }
 
@@ -971,6 +972,7 @@ let budgetMonths = [];
 let budgetIdx = 0;
 let selectedIdxs = new Set();
 let multiSelectMode = false;
+let focusedIdx = -1;
 
 document.getElementById('budget-prev').addEventListener('click', () => {
   if (budgetIdx > 0) { budgetIdx--; renderBudgetMonth(); }
@@ -1214,6 +1216,7 @@ function renderCatTable() {
     const tr = document.createElement('tr');
     tr.dataset.idx = i;
     if (selectedIdxs.has(i)) tr.classList.add('row-selected');
+    if (i === focusedIdx) tr.classList.add('row-focused');
 
     const hasCat = !!tx.category;
     tr.innerHTML = `
@@ -1311,6 +1314,7 @@ function toggleMultiSelect(on) {
   }
   if (!on) {
     selectedIdxs.clear();
+    focusedIdx = -1;
     updateBulkBar();
   }
 }
@@ -1339,6 +1343,53 @@ document.getElementById('cat-bulk-apply').addEventListener('click', () => {
 document.getElementById('cat-bulk-clear').addEventListener('click', () => {
   selectedIdxs.clear();
   renderCatTable();
+});
+
+function setCatFocus(idx) {
+  const tbody = document.getElementById('cat-tbody');
+  if (!tbody) return;
+  if (focusedIdx >= 0) {
+    const prev = tbody.querySelector(`tr[data-idx="${focusedIdx}"]`);
+    if (prev) prev.classList.remove('row-focused');
+  }
+  focusedIdx = idx;
+  const next = tbody.querySelector(`tr[data-idx="${focusedIdx}"]`);
+  if (next) {
+    next.classList.add('row-focused');
+    next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (!multiSelectMode || currentView !== 'categorize') return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  const n = state.catSession.length;
+  if (n === 0) return;
+
+  if (e.key === 'j') {
+    e.preventDefault();
+    setCatFocus(focusedIdx < 0 ? 0 : Math.min(focusedIdx + 1, n - 1));
+  } else if (e.key === 'k') {
+    e.preventDefault();
+    setCatFocus(focusedIdx <= 0 ? 0 : focusedIdx - 1);
+  } else if (e.key === 'x') {
+    if (focusedIdx < 0) return;
+    e.preventDefault();
+    const tbody = document.getElementById('cat-tbody');
+    const row = tbody?.querySelector(`tr[data-idx="${focusedIdx}"]`);
+    if (selectedIdxs.has(focusedIdx)) {
+      selectedIdxs.delete(focusedIdx);
+      row?.classList.remove('row-selected');
+      if (row) { const cb = row.querySelector('.row-sel'); if (cb) cb.checked = false; }
+    } else {
+      selectedIdxs.add(focusedIdx);
+      row?.classList.add('row-selected');
+      if (row) { const cb = row.querySelector('.row-sel'); if (cb) cb.checked = true; }
+    }
+    updateBulkBar();
+  }
 });
 
 function handleCatExport() {

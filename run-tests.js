@@ -41,6 +41,8 @@ const appCtx = vm.createContext({
     createElement:     mockEl,
     querySelector:     mockEl,
     execCommand:       () => {},
+    addEventListener:  () => {},
+    activeElement:     { tagName: 'BODY' },
   },
   console,
 });
