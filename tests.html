@@ -274,18 +274,18 @@ function runTests() {
     ];
 
     test('includes both boundary dates of a month', () => {
-      const r = filterByMonth(txs, 2025, 0); // January (month 0)
+      const r = filterByMonth(txs, 2025, 1); // January
       assertEqual(r.length, 2);
     });
 
     test('excludes other months', () => {
-      const r = filterByMonth(txs, 2025, 1); // February
+      const r = filterByMonth(txs, 2025, 2); // February
       assertEqual(r.length, 1);
       assertEqual(r[0].amount, -30);
     });
 
     test('returns empty for month with no transactions', () => {
-      const r = filterByMonth(txs, 2025, 5); // June
+      const r = filterByMonth(txs, 2025, 6); // June
       assertEqual(r.length, 0);
     });
   });
