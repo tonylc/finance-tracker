@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-04 (mobile responsive + subcategory bars + bulk categorize edit)  
+> **Last updated:** 2026-04-04 (multi-select toggle: checkboxes hidden by default in Categorize)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -107,7 +107,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 - `state.catSession[]` holds the working rows for the current Categorize session. It is independent of `state.transactions`.
 - Category dropdowns are `<select>` elements with `<optgroup>` per parent category. The full list of subcategories comes from `CAT_LIST`.
 - **Keyboard cycling:** A `keydown` listener on each category select calls `cycleCategoryByKey(currentValue, key, ALL_SUBS)`. The function finds all subcategories whose name starts with the pressed letter (case-insensitive), then advances to the next match after the current selection, wrapping around.
-- **Bulk edit:** Row selection is tracked in `selectedIdxs` (a module-level `Set<number>`). When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, category dropdown, Apply, and Clear. Apply sets the chosen category on all selected rows and clears `selectedIdxs`. The set is cleared on each new import load. A "select all" checkbox in the thead selects/deselects all rows.
+- **Bulk edit:** Checkboxes are hidden by default. A `☐ Multi-select` toggle button sits above the table (right-aligned); clicking it shows the checkbox column (`table.multi-select-active .td-check { display: table-cell }`) and the button becomes `☑ Multi-select` (blue tint). Row selection is tracked in `selectedIdxs` (a module-level `Set<number>`); `multiSelectMode` (boolean) tracks whether the column is visible. When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, category dropdown, Apply and Clear. Apply sets the chosen category on all selected rows and clears selection. Turning off multi-select or loading a new import clears selection and hides the column.
 - Rows with no category assigned are highlighted with `.cat-error` (red border on the select). Selected rows are highlighted with `.row-selected` (blue-tinted background).
 - `validateExport()` blocks export if any row has a blank category, returning the invalid row indices.
 - The exported CSV format: `Date,Description,Amount,Category,Fix` — identical to what Load expects.

@@ -274,8 +274,11 @@
   #cat-bulk-bar.visible { display: flex; }
   #cat-bulk-bar select { width: auto; min-width: 180px; }
   #cat-bulk-count { font-size: 13px; font-weight: 600; color: #3949ab; white-space: nowrap; }
-  .td-check { width: 32px; text-align: center; }
+  .td-check { width: 32px; text-align: center; display: none; }
+  table.multi-select-active .td-check { display: table-cell; }
   tr.row-selected td { background: #e8eaf6 !important; }
+  #cat-multiselect-btn { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; color: #555; }
+  #cat-multiselect-btn.active { background: #e8eaf6; border-color: #5c6bc0; color: #3949ab; font-weight: 600; }
 
   /* ── Mobile ── */
   @media (max-width: 600px) {
@@ -487,8 +490,12 @@
           <button class="btn btn-sm" style="background:#fff;border:1px solid #ccc;" id="cat-bulk-clear">Clear selection</button>
         </div>
 
+        <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+          <button id="cat-multiselect-btn" title="Toggle multi-select mode">&#9744; Multi-select</button>
+        </div>
+
         <div style="overflow-x:auto;">
-          <table>
+          <table id="cat-table">
             <thead>
               <tr>
                 <th class="td-check"><input type="checkbox" id="cat-select-all" title="Select all"></th>
@@ -963,6 +970,7 @@ function renderLoadSummary() {
 let budgetMonths = [];
 let budgetIdx = 0;
 let selectedIdxs = new Set();
+let multiSelectMode = false;
 
 document.getElementById('budget-prev').addEventListener('click', () => {
   if (budgetIdx > 0) { budgetIdx--; renderBudgetMonth(); }
@@ -1147,6 +1155,7 @@ function handleCatImport() {
   const accountKey = formatAccountKey(account.name, account.last4);
   state.catSession = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
   selectedIdxs.clear();
+  toggleMultiSelect(false);
 
   renderCatTable();
   document.getElementById('cat-review').style.display = 'block';
@@ -1182,6 +1191,8 @@ function buildCatSelectHTML(current) {
 function renderCatTable() {
   const tbody = document.getElementById('cat-tbody');
   tbody.innerHTML = '';
+  const table = document.getElementById('cat-table');
+  if (table) table.classList.toggle('multi-select-active', multiSelectMode);
 
   // Populate bulk category dropdown once
   const bulkCat = document.getElementById('cat-bulk-cat');
@@ -1288,6 +1299,25 @@ function updateBulkBar() {
   const selAll = document.getElementById('cat-select-all');
   if (selAll) selAll.checked = allSel;
 }
+
+function toggleMultiSelect(on) {
+  multiSelectMode = on;
+  const table = document.getElementById('cat-table');
+  const btn = document.getElementById('cat-multiselect-btn');
+  if (table) table.classList.toggle('multi-select-active', on);
+  if (btn) {
+    btn.classList.toggle('active', on);
+    btn.innerHTML = on ? '&#9745; Multi-select' : '&#9744; Multi-select';
+  }
+  if (!on) {
+    selectedIdxs.clear();
+    updateBulkBar();
+  }
+}
+
+document.getElementById('cat-multiselect-btn').addEventListener('click', () => {
+  toggleMultiSelect(!multiSelectMode);
+});
 
 document.getElementById('cat-select-all').addEventListener('change', e => {
   if (e.target.checked) {
