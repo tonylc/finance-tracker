@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-04 (buildHeaderMap error message capitalization fix)  
+> **Last updated:** 2026-04-04 (budget view: prominent month heading + full transaction list)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -56,15 +56,16 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 ### 2.2 Budget
 
-**Purpose:** Visualize spending by category for a chosen month, with drill-down into individual transactions.
+**Purpose:** Visualize spending by category for a chosen month, with a full transaction list and drill-down into individual categories.
 
 **User flow:**
 1. Navigate to Budget. If no transactions are loaded, an empty state is shown.
-2. The most recent month with transactions is displayed by default.
-3. Use **←** / **→** arrows to navigate months.
+2. The most recent month with transactions is displayed by default, shown as a large heading (e.g. "April 2025").
+3. Use **←** / **→** arrows to navigate months. Both the heading and bar chart update.
 4. The bar chart shows one bar per parent category, sorted by absolute spend descending.
-5. Click any bar to open the detail panel listing every transaction in that category for the month.
-6. Click **← All Categories** to return to the bar chart.
+5. A full transaction list for the current month (all categories, sorted by date) is shown below the bar chart.
+6. Click any bar to open the detail panel listing every transaction in that category for the month.
+7. Click **← All Categories** to return to the bar chart and transaction list.
 
 **Engineering details:**
 
@@ -77,6 +78,10 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 **Bar colors:**
 - `#43a047` (green) — negative total (expense / money leaving)
 - `#5c6bc0` (blue) — positive total (income / money received)
+
+**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card, making the current month immediately obvious. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+
+**Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date ascending. Shown below the bar chart. Columns: date, description, category, account, amount.
 
 **Detail panel:** Transactions are filtered to `SUB_TO_PARENT[t.category] === parent`, then sorted by date ascending.
 
