@@ -60,3 +60,15 @@ Apply this workflow for:
 - Any new function or symbol added to `__financeLib`
 - Any behavioral change to an existing library function
 - Any UI feature that depends on new or changed library logic
+
+## Commit Discipline
+
+Pure refactors must always land in a **separate commit** before feature changes. Never mix a refactor with a feature in the same commit.
+
+## Design Doc — Required After Every Commit
+
+After every commit, update `docs/design.md` to reflect the current state of the code. The doc is structured as a **product spec** (what the product does and why, written for a reader who hasn't seen the code) with a **detailed engineering specification** beneath each section (data shapes, function signatures, algorithms, constraints).
+
+The doc must stay in sync with the code — it is the authoritative reference for any future work.
+
+Commit the updated design doc in the same commit as the code change it describes, or as an immediate follow-up commit if the code change was already committed.

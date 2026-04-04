@@ -9,3 +9,7 @@ Pure refactors must always land in a **separate commit** before feature changes.
 ## Verification
 
 Always run `node /home/user/finance-tracker/run-tests.js` and confirm all tests pass before considering any task complete.
+
+## Design Doc
+
+After every commit, update `docs/design.md` to reflect current state. Written as a product spec with engineering detail underneath. Commit it alongside the code change or as an immediate follow-up.
