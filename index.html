@@ -1309,6 +1309,10 @@ function toggleMultiSelect(on) {
   }
   if (!on) {
     selectedIdxs.clear();
+    if (focusedIdx >= 0) {
+      const tbody = document.getElementById('cat-tbody');
+      tbody?.querySelector(`tr[data-idx="${focusedIdx}"]`)?.classList.remove('row-focused');
+    }
     focusedIdx = -1;
     updateBulkBar();
   }
