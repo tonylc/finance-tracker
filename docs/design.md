@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-04 (j/k/x keyboard navigation for multi-select in Categorize)  
+> **Last updated:** 2026-04-04 (budget banner shows month-specific stats)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -60,8 +60,8 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **User flow:**
 1. Navigate to Budget. If no transactions are loaded, an empty state is shown.
-2. The most recent month with transactions is displayed by default, shown as a large heading (e.g. "April 2025").
-3. Use **←** / **→** arrows to navigate months. Both the heading and bar chart update.
+2. The most recent month is displayed by default. The dark banner shows **Month Total** and **Transactions** for that month; both update as you navigate with ← →.
+3. Use **←** / **→** arrows to navigate months. The heading, banner stats, bar chart, and transaction list all update.
 4. The bar chart shows one bar per subcategory (e.g. Groceries, Gas / EV Charging), sorted by absolute spend descending.
 5. A full transaction list for the current month (all categories, sorted by date) is shown below the bar chart.
 6. Click any bar to open the detail panel listing every transaction in that category for the month.
@@ -79,7 +79,9 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 - `#43a047` (green) — negative total (expense / money leaving)
 - `#5c6bc0` (blue) — positive total (income / money received)
 
-**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card, making the current month immediately obvious. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+
+**Banner stats:** `#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card and are written in `renderBudgetMonth()` from `grandTotal` (categorized spend only) and `monthTx.length` (all transactions including uncategorized). They update on every month navigation.
 
 **Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date ascending. Shown below the bar chart. Columns: date, description, category, account, amount.
 
