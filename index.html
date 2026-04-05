@@ -998,6 +998,7 @@ function renderLoadSummary() {
 let budgetMonths = [];
 let budgetIdx = 0;
 let currentMonthTx = [];
+let budgetSelectedSub = null; // null = chart panel; string = active detail sub
 let selectedIdxs = new Set();
 let multiSelectMode = false;
 let focusedIdx = -1;
@@ -1012,6 +1013,7 @@ document.getElementById('budget-search').addEventListener('input', function () {
   renderBudgetTxList(filterBySearch(currentMonthTx, this.value));
 });
 document.getElementById('budget-back-btn').addEventListener('click', () => {
+  budgetSelectedSub = null;
   document.getElementById('budget-chart-panel').style.display = 'block';
   document.getElementById('budget-detail-panel').style.display = 'none';
 });
@@ -1025,6 +1027,7 @@ function renderBudget() {
   budgetMonths = getMonthList(state.transactions);
   // Default to most recent month
   budgetIdx = budgetMonths.length - 1;
+  budgetSelectedSub = null;
   renderBudgetMonth();
 }
 
@@ -1053,9 +1056,13 @@ function renderBudgetMonth() {
   document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
   document.getElementById('budget-month-tx-count').textContent = monthTx.length;
 
-  // Show chart panel, hide detail panel
-  document.getElementById('budget-chart-panel').style.display = 'block';
-  document.getElementById('budget-detail-panel').style.display = 'none';
+  // Restore panel state: re-enter detail view if a sub was selected, else show chart
+  if (budgetSelectedSub !== null) {
+    showCategoryDetail(budgetSelectedSub, monthTx);
+  } else {
+    document.getElementById('budget-chart-panel').style.display = 'block';
+    document.getElementById('budget-detail-panel').style.display = 'none';
+  }
 
   // Build subcategory bars sorted by |total| desc (Transfer excluded from spending)
   const cats = CAT_LIST
@@ -1113,6 +1120,7 @@ function renderBudgetTxList(txs) {
 }
 
 function showCategoryDetail(sub, monthTx) {
+  budgetSelectedSub = sub;
   document.getElementById('budget-chart-panel').style.display = 'none';
   document.getElementById('budget-detail-panel').style.display = 'block';
   document.getElementById('budget-detail-title').textContent = sub;

@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-05 (budget view transactions sorted newest-first)  
+> **Last updated:** 2026-04-05 (budget detail panel persists across month navigation)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -87,7 +87,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: date, description, category, account, amount.
 
-**Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then sorted by date descending (newest first) via `sortByDateDesc()`.
+**Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then sorted by date descending (newest first) via `sortByDateDesc()`. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). When the user navigates months while the detail panel is open, `renderBudgetMonth()` calls `showCategoryDetail(budgetSelectedSub, monthTx)` instead of resetting to the chart panel, so the drill-down persists across navigation. Pressing **← All Categories** clears `budgetSelectedSub` to `null`. Navigating away from Budget and back also resets it to `null`.
 
 **Uncategorized warning:** Transactions without a category, and transactions in the **Transfer** parent category (e.g. Credit Card Payment), are excluded from `aggregateByCategory()` and from the grand total. A yellow warning banner is shown if any uncategorized transactions exist in the current month.
 
