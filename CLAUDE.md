@@ -65,6 +65,8 @@ Apply this workflow for:
 
 Pure refactors must always land in a **separate commit** before feature changes. Never mix a refactor with a feature in the same commit.
 
+**Before every commit:** Run `node /home/user/finance-tracker/run-tests.js` and confirm all tests pass. Never commit with a failing test suite.
+
 ## Design Doc — Required After Every Commit
 
 After every commit, update `docs/design.md` to reflect the current state of the code. The doc is structured as a **product spec** (what the product does and why, written for a reader who hasn't seen the code) with a **detailed engineering specification** beneath each section (data shapes, function signatures, algorithms, constraints).
