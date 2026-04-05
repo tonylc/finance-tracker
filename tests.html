@@ -85,7 +85,7 @@ function runTests() {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
     parseTransaction, deduplicateTransactions, filterByMonth,
     aggregateByCategory, totalSpend, cycleCategoryByKey,
-    validateExport, toCSV, getMonthList, sortByDateDesc, ALL_SUBS, VALID_CATS,
+    validateExport, toCSV, getMonthList, sortByDateDesc, filterBySearch, ALL_SUBS, VALID_CATS,
   } = lib;
 
   // ── parseCSV ──────────────────────────────────────────────────────────────
@@ -527,6 +527,46 @@ function runTests() {
 
     test('given an empty array, returns an empty array', () => {
       assertEqual(sortByDateDesc([]).length, 0);
+    });
+  });
+
+  // ── filterBySearch ────────────────────────────────────────────────────────
+  suite('filterBySearch', () => {
+    const txs = [
+      { description: 'Starbucks Coffee', category: 'Coffee / Bakery', amount: -5.50, id: '1', accountKey: 'A', date: '2026-01-01', fix: false },
+      { description: 'Whole Foods', category: 'Groceries', amount: -87.32, id: '2', accountKey: 'A', date: '2026-01-02', fix: false },
+      { description: 'Shell Gas', category: 'Gas / EV Charging', amount: -45.00, id: '3', accountKey: 'A', date: '2026-01-03', fix: false },
+    ];
+
+    test('given empty query, returns all transactions', () => {
+      assertEqual(filterBySearch(txs, '').length, 3);
+      assertEqual(filterBySearch(txs, '   ').length, 3);
+    });
+
+    test('given description match, returns matching transactions', () => {
+      const r = filterBySearch(txs, 'starbucks');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].description, 'Starbucks Coffee');
+    });
+
+    test('given category match, returns matching transactions', () => {
+      const r = filterBySearch(txs, 'groceries');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].category, 'Groceries');
+    });
+
+    test('given amount match, returns matching transactions', () => {
+      const r = filterBySearch(txs, '87.32');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].amount, -87.32);
+    });
+
+    test('given no match, returns empty array', () => {
+      assertEqual(filterBySearch(txs, 'zzznomatch').length, 0);
+    });
+
+    test('match is case-insensitive', () => {
+      assertEqual(filterBySearch(txs, 'SHELL').length, 1);
     });
   });
 

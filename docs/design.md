@@ -73,6 +73,8 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **Month filtering:** `filterByMonth(transactions, year, month)` filters the full transaction list to a single calendar month. Month is 1-based. Implementation: `d.getMonth() + 1 === month`.
 
+**Transaction search:** A search input (`#budget-search`) above the transaction list filters the visible rows in real time. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, and `String(amount)`. An empty or whitespace-only query returns all transactions. The search resets to empty on every month navigation. The bar chart is unaffected by the search.
+
 **Bar chart rendering:** Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
 
 **Bar colors:**
@@ -220,6 +222,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `filterByMonth` | `(transactions, year: number, month: number) → Transaction[]` | Filters to a calendar month. `month` is **1-based** (1=January, 12=December). |
+| `filterBySearch` | `(transactions, query: string) → Transaction[]` | Case-insensitive substring match against `description`, `category`, and `String(amount)`. Returns all transactions when query is blank. |
 | `aggregateByCategory` | `(transactions, excludeParents?: string[]) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. Skips any parent listed in `excludeParents` (e.g. `['Transfer']`). |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |
 | `getMonthList` | `(transactions) → { year, month }[]` | Returns unique year-month pairs sorted chronologically. Month is 1-based. Skips blank/invalid dates. |

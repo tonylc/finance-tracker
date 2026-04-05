@@ -403,7 +403,11 @@
         <!-- Bar chart panel (default view) -->
         <div id="budget-chart-panel">
           <div id="budget-bars"></div>
-          <div id="budget-tx-section" style="margin-top:24px;">
+          <div id="budget-search-wrap" style="margin-top:16px;">
+            <input id="budget-search" type="search" placeholder="Search transactions…"
+              style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+          </div>
+          <div id="budget-tx-section" style="margin-top:16px;">
             <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Transactions</div>
             <table class="budget-table">
               <thead>
@@ -779,6 +783,16 @@ function filterByMonth(transactions, year, month) {
   });
 }
 
+function filterBySearch(transactions, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return transactions;
+  return transactions.filter(t =>
+    t.description.toLowerCase().includes(q) ||
+    t.category.toLowerCase().includes(q) ||
+    String(t.amount).includes(q)
+  );
+}
+
 function aggregateByCategory(transactions, excludeParents = []) {
   // Returns { parent: { sub: { total, count } } } and grandTotal
   const excluded = new Set(excludeParents);
@@ -983,6 +997,7 @@ function renderLoadSummary() {
 // ══════════════════════════════════════════════════
 let budgetMonths = [];
 let budgetIdx = 0;
+let currentMonthTx = [];
 let selectedIdxs = new Set();
 let multiSelectMode = false;
 let focusedIdx = -1;
@@ -992,6 +1007,9 @@ document.getElementById('budget-prev').addEventListener('click', () => {
 });
 document.getElementById('budget-next').addEventListener('click', () => {
   if (budgetIdx < budgetMonths.length - 1) { budgetIdx++; renderBudgetMonth(); }
+});
+document.getElementById('budget-search').addEventListener('input', function () {
+  renderBudgetTxList(filterBySearch(currentMonthTx, this.value));
 });
 document.getElementById('budget-back-btn').addEventListener('click', () => {
   document.getElementById('budget-chart-panel').style.display = 'block';
@@ -1073,10 +1091,15 @@ function renderBudgetMonth() {
   });
 
   // Populate transaction list
+  currentMonthTx = monthTx;
+  document.getElementById('budget-search').value = '';
+  renderBudgetTxList(monthTx);
+}
+
+function renderBudgetTxList(txs) {
   const txTbody = document.getElementById('budget-tx-tbody');
   txTbody.innerHTML = '';
-  const sorted = sortByDateDesc(monthTx);
-  sorted.forEach(t => {
+  sortByDateDesc(txs).forEach(t => {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${t.date}</td>
@@ -1704,7 +1727,7 @@ populateAccountDropdowns();
 // ══════════════════════════════════════════════════
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
-  parseTransaction, deduplicateTransactions, filterByMonth, aggregateByCategory,
+  parseTransaction, deduplicateTransactions, filterByMonth, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
