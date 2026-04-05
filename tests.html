@@ -388,16 +388,16 @@ function runTests() {
 
   // ── cycleCategoryByKey ────────────────────────────────────────────────────
   suite('cycleCategoryByKey', () => {
-    test("'g' key cycles Gas → Groceries → General Merchandise → Gifts → wraps", () => {
+    test("'g' key cycles Gas → Groceries → Gifts → General Merchandise → wraps", () => {
       const r1 = cycleCategoryByKey('', 'g', ALL_SUBS);
       assertEqual(r1, 'Gas / EV Charging');
       const r2 = cycleCategoryByKey('Gas / EV Charging', 'g', ALL_SUBS);
       assertEqual(r2, 'Groceries');
       const r3 = cycleCategoryByKey('Groceries', 'g', ALL_SUBS);
-      assertEqual(r3, 'General Merchandise');
-      const r4 = cycleCategoryByKey('General Merchandise', 'g', ALL_SUBS);
-      assertEqual(r4, 'Gifts');
-      const r5 = cycleCategoryByKey('Gifts', 'g', ALL_SUBS);
+      assertEqual(r3, 'Gifts');
+      const r4 = cycleCategoryByKey('Gifts', 'g', ALL_SUBS);
+      assertEqual(r4, 'General Merchandise');
+      const r5 = cycleCategoryByKey('General Merchandise', 'g', ALL_SUBS);
       assertEqual(r5, 'Gas / EV Charging');
     });
 
