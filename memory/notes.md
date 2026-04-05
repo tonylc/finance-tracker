@@ -16,6 +16,10 @@ After every commit, update `docs/design.md` to reflect current state. Written as
 
 **Review before committing:** After drafting design doc changes, show the user the diff (what was added/changed/removed) and get acknowledgment before including it in the commit.
 
+## Push Reporting
+
+Always report the result of `git push` explicitly. If the push to remote fails, flag it clearly to the user — a successful local commit is irrelevant if the push failed.
+
 ---
 ## 2026-04-04 13:42
 
