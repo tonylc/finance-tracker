@@ -798,6 +798,10 @@ function totalSpend(transactions) {
   return transactions.reduce((s, t) => s + t.amount, 0);
 }
 
+function sortByDateDesc(transactions) {
+  return [...transactions].sort((a, b) => b.date.localeCompare(a.date));
+}
+
 function cycleCategoryByKey(currentValue, key, subcategories) {
   const lower = key.toLowerCase();
   const matches = subcategories.filter(s => s.toLowerCase().startsWith(lower));
@@ -1067,7 +1071,7 @@ function renderBudgetMonth() {
   // Populate transaction list
   const txTbody = document.getElementById('budget-tx-tbody');
   txTbody.innerHTML = '';
-  const sorted = [...monthTx].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = sortByDateDesc(monthTx);
   sorted.forEach(t => {
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -1086,9 +1090,7 @@ function showCategoryDetail(sub, monthTx) {
   document.getElementById('budget-detail-panel').style.display = 'block';
   document.getElementById('budget-detail-title').textContent = sub;
 
-  const txs = monthTx
-    .filter(t => t.category === sub)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const txs = sortByDateDesc(monthTx.filter(t => t.category === sub));
 
   const tbody = document.getElementById('budget-detail-tbody');
   tbody.innerHTML = '';
@@ -1699,7 +1701,7 @@ populateAccountDropdowns();
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, aggregateByCategory,
-  totalSpend, cycleCategoryByKey, validateExport, toCSV, getMonthList,
+  totalSpend, sortByDateDesc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
 </script>

@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-05 (categorize two-mode keyboard: nav vs edit)  
+> **Last updated:** 2026-04-05 (budget view transactions sorted newest-first)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -83,9 +83,9 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **Banner stats:** `#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card and are written in `renderBudgetMonth()` from `grandTotal` (categorized spend only) and `monthTx.length` (all transactions including uncategorized). They update on every month navigation.
 
-**Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date ascending. Shown below the bar chart. Columns: date, description, category, account, amount.
+**Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: date, description, category, account, amount.
 
-**Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then sorted by date ascending.
+**Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then sorted by date descending (newest first) via `sortByDateDesc()`.
 
 **Uncategorized warning:** Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. A yellow warning banner is shown if any exist in the current month.
 
@@ -223,6 +223,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | `aggregateByCategory` | `(transactions) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |
 | `getMonthList` | `(transactions) → { year, month }[]` | Returns unique year-month pairs sorted chronologically. Month is 1-based. Skips blank/invalid dates. |
+| `sortByDateDesc` | `(transactions: Transaction[]) → Transaction[]` | Returns a new array sorted by `date` descending (newest first). Does not mutate the input. |
 
 ### Category Utilities
 
