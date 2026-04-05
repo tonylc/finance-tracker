@@ -13,5 +13,6 @@ From the current feature branch, rebase all its commits cleanly into `main`:
 8. Switch to main: `git checkout main`
 9. Fast-forward main to the rebased feature tip: `git merge --ff-only $BRANCH`
 10. Push main: `git push -u origin main`
+11. Switch back to the original branch: `git checkout $BRANCH`
 
-After the push, report which branch you started on, how many commits were integrated, and confirm main is now up to date.
+After the push, report which branch you started on, how many commits were integrated, confirm main is now up to date, and confirm you are back on the original branch.
