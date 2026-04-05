@@ -74,3 +74,5 @@ After every commit, update `docs/design.md` to reflect the current state of the 
 The doc must stay in sync with the code — it is the authoritative reference for any future work.
 
 Commit the updated design doc in the same commit as the code change it describes, or as an immediate follow-up commit if the code change was already committed.
+
+Run `/update-design-doc` to invoke this step manually at any time.
