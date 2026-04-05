@@ -14,5 +14,6 @@ From the current feature branch, rebase all its commits cleanly into `main`:
 9. Fast-forward main to the rebased feature tip: `git merge --ff-only $BRANCH`
 10. Push main: `git push -u origin main`
 11. Switch back to the original branch: `git checkout $BRANCH`
+12. Force-push the feature branch to sync its remote: `git push --force-with-lease -u origin $BRANCH`
 
 After the push, report which branch you started on, how many commits were integrated, confirm main is now up to date, and confirm you are back on the original branch.
