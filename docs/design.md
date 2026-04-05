@@ -87,7 +87,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 **Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then sorted by date descending (newest first) via `sortByDateDesc()`.
 
-**Uncategorized warning:** Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. A yellow warning banner is shown if any exist in the current month.
+**Uncategorized warning:** Transactions without a category, and transactions in the **Transfer** parent category (e.g. Credit Card Payment), are excluded from `aggregateByCategory()` and from the grand total. A yellow warning banner is shown if any uncategorized transactions exist in the current month.
 
 **Navigation state:** `budgetMonths` and `budgetIdx` are module-level variables reset on each call to `renderBudget()`. Navigating away from Budget and back resets to the most recent month.
 
@@ -220,7 +220,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `filterByMonth` | `(transactions, year: number, month: number) → Transaction[]` | Filters to a calendar month. `month` is **1-based** (1=January, 12=December). |
-| `aggregateByCategory` | `(transactions) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. |
+| `aggregateByCategory` | `(transactions, excludeParents?: string[]) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. Skips any parent listed in `excludeParents` (e.g. `['Transfer']`). |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |
 | `getMonthList` | `(transactions) → { year, month }[]` | Returns unique year-month pairs sorted chronologically. Month is 1-based. Skips blank/invalid dates. |
 | `sortByDateDesc` | `(transactions: Transaction[]) → Transaction[]` | Returns a new array sorted by `date` descending (newest first). Does not mutate the input. |

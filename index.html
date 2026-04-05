@@ -779,13 +779,15 @@ function filterByMonth(transactions, year, month) {
   });
 }
 
-function aggregateByCategory(transactions) {
+function aggregateByCategory(transactions, excludeParents = []) {
   // Returns { parent: { sub: { total, count } } } and grandTotal
+  const excluded = new Set(excludeParents);
   const groups = {};
   let grandTotal = 0;
   for (const t of transactions) {
     if (!t.category) continue;
     const parent = SUB_TO_PARENT[t.category] || 'Misc';
+    if (excluded.has(parent)) continue;
     if (!groups[parent]) groups[parent] = {};
     if (!groups[parent][t.category]) groups[parent][t.category] = { total: 0, count: 0 };
     groups[parent][t.category].total += t.amount;
@@ -1029,7 +1031,7 @@ function renderBudgetMonth() {
     warnEl.style.display = 'none';
   }
 
-  const { groups, grandTotal } = aggregateByCategory(monthTx);
+  const { groups, grandTotal } = aggregateByCategory(monthTx, ['Transfer']);
   document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
   document.getElementById('budget-month-tx-count').textContent = monthTx.length;
 
@@ -1037,8 +1039,9 @@ function renderBudgetMonth() {
   document.getElementById('budget-chart-panel').style.display = 'block';
   document.getElementById('budget-detail-panel').style.display = 'none';
 
-  // Build subcategory bars sorted by |total| desc
+  // Build subcategory bars sorted by |total| desc (Transfer excluded from spending)
   const cats = CAT_LIST
+    .filter(({ parent }) => parent !== 'Transfer')
     .flatMap(({ parent, subs }) =>
       subs
         .filter(sub => groups[parent]?.[sub])

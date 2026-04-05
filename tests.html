@@ -353,6 +353,25 @@ function runTests() {
       const { groups } = aggregateByCategory(txs);
       assert(!groups['Food']['Coffee / Bakery'], 'Coffee not present');
     });
+
+    test('excludes Transfer parent from groups and grandTotal when excludeParents is passed', () => {
+      const mixed = [
+        { category: 'Groceries', amount: -50, id: '1', accountKey: 'A', date: '2026-01-01', description: 'x', fix: false },
+        { category: 'Credit Card Payment', amount: -200, id: '2', accountKey: 'A', date: '2026-01-01', description: 'y', fix: false },
+      ];
+      const { groups, grandTotal } = aggregateByCategory(mixed, ['Transfer']);
+      assertEqual(grandTotal, -50);
+      assertEqual(groups['Transfer'], undefined);
+    });
+
+    test('without excludeParents, Transfer is included in grandTotal', () => {
+      const mixed = [
+        { category: 'Groceries', amount: -50, id: '1', accountKey: 'A', date: '2026-01-01', description: 'x', fix: false },
+        { category: 'Credit Card Payment', amount: -200, id: '2', accountKey: 'A', date: '2026-01-01', description: 'y', fix: false },
+      ];
+      const { grandTotal } = aggregateByCategory(mixed);
+      assertEqual(grandTotal, -250);
+    });
   });
 
   // ── totalSpend ────────────────────────────────────────────────────────────
