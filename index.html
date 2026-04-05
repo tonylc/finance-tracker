@@ -1241,7 +1241,11 @@ function renderCatTable() {
     });
 
     sel.addEventListener('keydown', e => {
-      // Only intercept single letter keys, not special keys
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        sel.blur(); // return to navigation mode
+        return;
+      }
       if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         const idx = parseInt(sel.dataset.idx);
@@ -1253,7 +1257,7 @@ function renderCatTable() {
           sel.closest('td').classList.remove('cat-error');
           updateCatProgress();
         }
-        sel.blur(); // close native dropdown so next key press cycles correctly
+        // Stay focused — ESC returns to navigation mode
       }
     });
   });
@@ -1346,12 +1350,13 @@ document.getElementById('cat-bulk-clear').addEventListener('click', () => {
 });
 
 document.getElementById('cat-bulk-cat').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.preventDefault(); e.currentTarget.blur(); return; }
   if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
     const sel = e.currentTarget;
     const next = cycleCategoryByKey(sel.value, e.key, ALL_SUBS);
     sel.value = next;
-    sel.blur(); // close native dropdown so next key press cycles correctly
+    // Stay focused — ESC blurs
   }
 });
 
@@ -1411,6 +1416,22 @@ document.addEventListener('keydown', e => {
       if (row) { const cb = row.querySelector('.row-sel'); if (cb) cb.checked = true; }
     }
     updateBulkBar();
+  } else if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && focusedIdx >= 0) {
+    // Letter key while a row is focused → enter edit mode: cycle + focus the row's select
+    e.preventDefault();
+    const tbody = document.getElementById('cat-tbody');
+    const sel = tbody?.querySelector(`tr[data-idx="${focusedIdx}"] select`);
+    if (sel) {
+      const current = state.catSession[focusedIdx].category;
+      const next = cycleCategoryByKey(current, e.key, ALL_SUBS);
+      if (next !== current) {
+        state.catSession[focusedIdx].category = next;
+        sel.value = next;
+        sel.closest('td').classList.remove('cat-error');
+        updateCatProgress();
+      }
+      sel.focus();
+    }
   }
 });
 
