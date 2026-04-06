@@ -1342,6 +1342,11 @@ function renderCatTable() {
       </td>
     `;
     tbody.appendChild(tr);
+    tr.addEventListener('mouseenter', () => {
+      const active = document.activeElement;
+      if (active?.tagName === 'SELECT' && active.closest('#cat-table')) active.blur();
+      setCatFocus(i);
+    });
   });
 
   // Category select handlers
