@@ -254,8 +254,9 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 
 | Function | Signature | Description |
 |---|---|---|
+| `isValidLast4` | `(val: unknown) → boolean` | Returns `true` iff `val` is a string matching `/^\d{4}$/` (exactly 4 ASCII digits). Used by both `importAccountsJSON` and the settings form (`saveAccountConfig`) as the single source of truth for last4 validation. |
 | `exportAccountsJSON` | `(accounts: AccountProfile[]) → string` | Returns a minified (no newlines) JSON string of the accounts array. |
-| `importAccountsJSON` | `(jsonString: string) → { ok: true, accounts: AccountProfile[] } \| { ok: false, error: string }` | Parses and validates a JSON blob. Requires top-level array; each element must have `name` (string), `last4` (string), and `inputCsvFormat` (array). Returns `{ ok: false, error }` on malformed JSON, non-array input, or any account missing a required field. Missing `id` values are assigned by the UI caller. |
+| `importAccountsJSON` | `(jsonString: string) → { ok: true, accounts: AccountProfile[] } \| { ok: false, error: string }` | Parses and validates a JSON blob. Requires top-level array; each element must have `name` (string), `last4` (passes `isValidLast4`), and `inputCsvFormat` (array). Returns `{ ok: false, error }` on malformed JSON, non-array input, or any account failing validation. Missing `id` values are assigned by the UI caller. |
 
 ### Formatting
 
