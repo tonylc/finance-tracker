@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-06 (budget search always visible, unified columns, fix label + searchable, row-click expand; account settings export / import)
+> **Last updated:** 2026-04-06 (budget search always visible, unified columns, fix label + searchable, row-click expand; account settings export / import; Load page account export; date-ascending CSV exports)
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -51,6 +51,8 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 - `state.transactions` is the single source of truth. It grows monotonically during a session and is never persisted to localStorage.
 
 **Account key format:** `"Account Name *last4"` — produced by `formatAccountKey(name, last4)`.
+
+**Export:** Each account chip in the summary includes an **Export** button. Clicking it calls `handleLoadExport(accountKey)`, which filters `state.transactions` to that account, sorts ascending with `sortByDateAsc()`, serializes with `toCSV()`, and displays the result in `#load-export-card` below the summary. A **Copy** button copies the textarea to clipboard.
 
 ---
 
@@ -118,7 +120,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 - Rows with no category assigned are highlighted with `.cat-error` (red border on the select). Selected rows are highlighted with `.row-selected` (blue-tinted background). Focused row: `.row-focused` (purple tint + left border).
 - `validateExport()` blocks export if any row has a blank category, returning the invalid row indices.
 - The exported CSV format: `Date,Description,Amount,Category,Fix` — identical to what Load expects.
-- `toCSV()` handles quoting of fields containing commas, quotes, or newlines.
+- `toCSV()` handles quoting of fields containing commas, quotes, or newlines. Transactions are sorted date-ascending (`sortByDateAsc()`) before serialization.
 
 ---
 
@@ -233,6 +235,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |
 | `getMonthList` | `(transactions) → { year, month }[]` | Returns unique year-month pairs sorted chronologically. Month is 1-based. Skips blank/invalid dates. |
 | `sortByDateDesc` | `(transactions: Transaction[]) → Transaction[]` | Returns a new array sorted by `date` descending (newest first). Does not mutate the input. |
+| `sortByDateAsc` | `(transactions: Transaction[]) → Transaction[]` | Returns a new array sorted by `date` ascending (oldest first). Does not mutate the input. |
 
 ### Category Utilities
 
