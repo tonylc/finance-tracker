@@ -20,6 +20,16 @@ After every commit, update `docs/design.md` to reflect current state. Written as
 
 Always report the result of `git push` explicitly. If the push to remote fails, flag it clearly to the user — a successful local commit is irrelevant if the push failed.
 
+## Refactor Before Patching
+
+When a bug fix doesn't fully resolve the issue and a second (or third) patch is needed
+for the same symptom, stop and ask: is the root cause structural? If scattered
+responsibilities or a missing single-source-of-truth is the cause, do the refactor first
+(in its own commit), then the fix becomes trivial or disappears entirely.
+
+Concrete trigger: if you find yourself writing a second commit to fix the same broken
+behavior, treat that as a signal to reconsider the design before writing more patches.
+
 ---
 ## 2026-04-04 13:42
 
