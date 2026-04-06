@@ -1008,13 +1008,12 @@ document.getElementById('budget-prev').addEventListener('click', () => {
 document.getElementById('budget-next').addEventListener('click', () => {
   if (budgetIdx < budgetMonths.length - 1) { budgetIdx++; renderBudgetMonth(); }
 });
-document.getElementById('budget-search').addEventListener('input', function () {
-  renderBudgetTxList(filterBySearch(currentMonthTx, this.value));
+document.getElementById('budget-search').addEventListener('input', () => {
+  renderActiveBudgetPanel();
 });
 document.getElementById('budget-back-btn').addEventListener('click', () => {
   budgetSelectedSub = null;
-  document.getElementById('budget-chart-panel').style.display = 'block';
-  document.getElementById('budget-detail-panel').style.display = 'none';
+  renderActiveBudgetPanel();
 });
 
 function renderBudget() {
@@ -1052,16 +1051,6 @@ function renderBudgetMonth() {
   }
 
   const { groups, grandTotal } = aggregateByCategory(monthTx, ['Transfer']);
-  document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
-  document.getElementById('budget-month-tx-count').textContent = monthTx.length;
-
-  // Restore panel state: re-enter detail view if a sub was selected, else show chart
-  if (budgetSelectedSub !== null) {
-    showCategoryDetail(budgetSelectedSub, monthTx);
-  } else {
-    document.getElementById('budget-chart-panel').style.display = 'block';
-    document.getElementById('budget-detail-panel').style.display = 'none';
-  }
 
   // Build subcategory bars sorted by |total| desc (Transfer excluded from spending)
   const cats = CAT_LIST
@@ -1092,17 +1081,19 @@ function renderBudgetMonth() {
       <div class="budget-bar-amount ${total < 0 ? 'neg' : 'pos'}">${fmtAmount(total)}</div>
       <div class="budget-bar-count">${count} tx</div>
     `;
-    row.addEventListener('click', () => showCategoryDetail(sub, monthTx));
+    row.addEventListener('click', () => { budgetSelectedSub = sub; renderActiveBudgetPanel(); });
     barsEl.appendChild(row);
   });
 
-  // Populate transaction list
   currentMonthTx = monthTx;
-  document.getElementById('budget-search').value = '';
-  renderBudgetTxList(monthTx);
+  renderActiveBudgetPanel();
 }
 
 function renderBudgetTxList(txs) {
+  const { grandTotal } = aggregateByCategory(txs, ['Transfer']);
+  document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
+  document.getElementById('budget-month-tx-count').textContent = txs.length;
+
   const txTbody = document.getElementById('budget-tx-tbody');
   txTbody.innerHTML = '';
   sortByDateDesc(txs).forEach(t => {
@@ -1118,26 +1109,33 @@ function renderBudgetTxList(txs) {
   });
 }
 
-function showCategoryDetail(sub, monthTx) {
-  budgetSelectedSub = sub;
-  document.getElementById('budget-chart-panel').style.display = 'none';
-  document.getElementById('budget-detail-panel').style.display = 'block';
-  document.getElementById('budget-detail-title').textContent = sub;
-
-  const txs = sortByDateDesc(monthTx.filter(t => t.category === sub));
-
-  const tbody = document.getElementById('budget-detail-tbody');
-  tbody.innerHTML = '';
-  txs.forEach(t => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${t.date}</td>
-      <td>${t.description}</td>
-      <td style="font-size:11px;color:#888;">${t.accountKey}</td>
-      <td class="td-amount ${t.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(t.amount)}</td>
-    `;
-    tbody.appendChild(row);
-  });
+function renderActiveBudgetPanel() {
+  const query = document.getElementById('budget-search').value;
+  if (budgetSelectedSub !== null) {
+    const txs = sortByDateDesc(currentMonthTx.filter(t => t.category === budgetSelectedSub));
+    const { grandTotal } = aggregateByCategory(txs, ['Transfer']);
+    document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
+    document.getElementById('budget-month-tx-count').textContent = txs.length;
+    document.getElementById('budget-detail-title').textContent = budgetSelectedSub;
+    document.getElementById('budget-chart-panel').style.display = 'none';
+    document.getElementById('budget-detail-panel').style.display = 'block';
+    const tbody = document.getElementById('budget-detail-tbody');
+    tbody.innerHTML = '';
+    txs.forEach(t => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${t.date}</td>
+        <td>${t.description}</td>
+        <td style="font-size:11px;color:#888;">${t.accountKey}</td>
+        <td class="td-amount ${t.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(t.amount)}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  } else {
+    document.getElementById('budget-chart-panel').style.display = 'block';
+    document.getElementById('budget-detail-panel').style.display = 'none';
+    renderBudgetTxList(filterBySearch(currentMonthTx, query));
+  }
 }
 
 // ══════════════════════════════════════════════════
