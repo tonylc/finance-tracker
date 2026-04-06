@@ -1091,30 +1091,9 @@ function renderBudget() {
   renderBudgetMonth();
 }
 
-function renderBudgetMonth() {
-  if (!budgetMonths.length) return;
-  const { year, month } = budgetMonths[budgetIdx];
-  const label = `${MONTH_NAMES[month - 1]} ${year}`;
-  document.getElementById('budget-month-label').textContent = label;
-  document.getElementById('budget-month-heading').textContent = label;
-  document.getElementById('budget-prev').disabled = budgetIdx === 0;
-  document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
+function renderBudgetBars(txs) {
+  const { groups } = aggregateByCategory(txs, ['Transfer']);
 
-  const monthTx = filterByMonth(state.transactions, year, month);
-  const uncategorized = monthTx.filter(t => !t.category).length;
-
-  const warnEl = document.getElementById('budget-warn');
-  if (uncategorized > 0) {
-    warnEl.className = 'alert alert-warn';
-    warnEl.textContent = `${uncategorized} transaction(s) this month have no category and are excluded from totals.`;
-    warnEl.style.display = 'block';
-  } else {
-    warnEl.style.display = 'none';
-  }
-
-  const { groups, grandTotal } = aggregateByCategory(monthTx, ['Transfer']);
-
-  // Build subcategory bars sorted by |total| desc (Transfer excluded from spending)
   const cats = CAT_LIST
     .filter(({ parent }) => parent !== 'Transfer')
     .flatMap(({ parent, subs }) =>
@@ -1146,8 +1125,31 @@ function renderBudgetMonth() {
     row.addEventListener('click', () => { budgetSelectedSub = sub; renderActiveBudgetPanel(); });
     barsEl.appendChild(row);
   });
+}
+
+function renderBudgetMonth() {
+  if (!budgetMonths.length) return;
+  const { year, month } = budgetMonths[budgetIdx];
+  const label = `${MONTH_NAMES[month - 1]} ${year}`;
+  document.getElementById('budget-month-label').textContent = label;
+  document.getElementById('budget-month-heading').textContent = label;
+  document.getElementById('budget-prev').disabled = budgetIdx === 0;
+  document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
+
+  const monthTx = filterByMonth(state.transactions, year, month);
+  const uncategorized = monthTx.filter(t => !t.category).length;
+
+  const warnEl = document.getElementById('budget-warn');
+  if (uncategorized > 0) {
+    warnEl.className = 'alert alert-warn';
+    warnEl.textContent = `${uncategorized} transaction(s) this month have no category and are excluded from totals.`;
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
+  }
 
   currentMonthTx = monthTx;
+  renderBudgetBars(monthTx);
   renderActiveBudgetPanel();
 }
 
