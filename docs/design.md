@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-05 (budget detail panel persists across month navigation)  
+> **Last updated:** 2026-04-06 (account settings export / import)  
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -143,6 +143,8 @@ All views are mobile-friendly via a `@media (max-width: 600px)` block. Key adapt
 4. Click **Parse Columns** — the app splits the header and renders a dropdown for each column.
 5. Map each column to: skip, Date, Description, Amount, Category, or Fix.
 6. Click **Save Account**.
+7. Use **Export Settings** to generate a minified JSON blob of all account profiles. Copy it from the read-only textarea; a pretty-printed preview is shown below for review.
+8. Use **Import Settings** to paste a previously exported blob and instantly restore all profiles. A pretty-printed preview of the imported config is shown on success; validation errors appear inline if the JSON is malformed or missing required fields.
 
 **Engineering details:**
 
@@ -151,6 +153,8 @@ All views are mobile-friendly via a `@media (max-width: 600px)` block. Key adapt
 - `buildHeaderMap(headerRow, inputCsvFormat)` uses `inputCsvFormat` when provided, ignoring the header values. This allows banks that rename or reorder columns to work correctly.
 - Required fields: Date, Description, Amount. Save is blocked if any are unmapped.
 - Each account gets a UUID `id` on creation. Deleting an account removes it from `state.userConfig.accounts` and from the account dropdowns in Load and Categorize.
+- `exportAccountsJSON(accounts)` serializes `state.userConfig.accounts` to a minified JSON string. The UI layer pretty-prints it for the preview display.
+- `importAccountsJSON(jsonString)` parses and validates the string (see §4). On success the UI layer replaces `state.userConfig.accounts`, assigns any missing `id` values via `crypto.randomUUID()`, calls `saveConfig()`, and re-renders the account table.
 
 ---
 
@@ -240,6 +244,13 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 |---|---|---|
 | `validateExport` | `(rows) → { valid, invalidRows: number[] }` | Returns valid=false and indices of rows with blank category. |
 | `toCSV` | `(rows) → string` | Serializes rows to CSV string with header `Date,Description,Amount,Category,Fix`. Quotes fields containing commas, quotes, or newlines. |
+
+### Settings Import / Export
+
+| Function | Signature | Description |
+|---|---|---|
+| `exportAccountsJSON` | `(accounts: AccountProfile[]) → string` | Returns a minified (no newlines) JSON string of the accounts array. |
+| `importAccountsJSON` | `(jsonString: string) → { ok: true, accounts: AccountProfile[] } \| { ok: false, error: string }` | Parses and validates a JSON blob. Requires top-level array; each element must have `name` (string), `last4` (string), and `inputCsvFormat` (array). Returns `{ ok: false, error }` on malformed JSON, non-array input, or any account missing a required field. Missing `id` values are assigned by the UI caller. |
 
 ### Formatting
 
