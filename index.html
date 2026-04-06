@@ -1742,7 +1742,7 @@ function saveAccountConfig() {
     errEl.style.display = 'block';
     return;
   }
-  if (!/^\d{4}$/.test(last4)) {
+  if (!isValidLast4(last4)) {
     errEl.className = 'alert alert-error';
     errEl.textContent = 'Last 4 digits must be exactly 4 numbers.';
     errEl.style.display = 'block';
@@ -1830,6 +1830,10 @@ populateAccountDropdowns();
 // ══════════════════════════════════════════════════
 //  EXPOSE PURE FUNCTIONS FOR TESTS
 // ══════════════════════════════════════════════════
+function isValidLast4(val) {
+  return typeof val === 'string' && /^\d{4}$/.test(val);
+}
+
 function exportAccountsJSON(accounts) {
   return JSON.stringify(accounts);
 }
@@ -1849,8 +1853,8 @@ function importAccountsJSON(jsonString) {
     if (typeof a.name !== 'string' || !a.name) {
       return { ok: false, error: `Account at index ${i} is missing a valid "name".` };
     }
-    if (typeof a.last4 !== 'string' || !a.last4) {
-      return { ok: false, error: `Account at index ${i} is missing a valid "last4".` };
+    if (!isValidLast4(a.last4)) {
+      return { ok: false, error: `Account at index ${i}: "last4" must be exactly 4 digits.` };
     }
     if (!Array.isArray(a.inputCsvFormat)) {
       return { ok: false, error: `Account at index ${i} is missing a valid "inputCsvFormat" array.` };
@@ -1863,7 +1867,7 @@ window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
-  exportAccountsJSON, importAccountsJSON,
+  exportAccountsJSON, importAccountsJSON, isValidLast4,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
 </script>

@@ -642,6 +642,41 @@ function runTests() {
       const result = importAccountsJSON(input);
       assertEqual(result.ok, false);
     });
+
+    test('given last4 that is fewer than 4 digits, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '12', inputCsvFormat: [] }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, false);
+    });
+
+    test('given last4 that contains non-digit characters, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '12ab', inputCsvFormat: [] }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, false);
+    });
+  });
+
+  // ── isValidLast4 ─────────────────────────────────────────────────────────
+  suite('isValidLast4', () => {
+    test('given exactly 4 digits, returns true', () => {
+      assertEqual(isValidLast4('1234'), true);
+    });
+
+    test('given fewer than 4 digits, returns false', () => {
+      assertEqual(isValidLast4('123'), false);
+    });
+
+    test('given more than 4 digits, returns false', () => {
+      assertEqual(isValidLast4('12345'), false);
+    });
+
+    test('given non-digit characters, returns false', () => {
+      assertEqual(isValidLast4('12ab'), false);
+    });
+
+    test('given a number (not a string), returns false', () => {
+      assertEqual(isValidLast4(1234), false);
+    });
   });
 
   // ── sortByDateAsc ─────────────────────────────────────────────────────────
