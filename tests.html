@@ -570,6 +570,66 @@ function runTests() {
     });
   });
 
+  // ── exportAccountsJSON ───────────────────────────────────────────────────
+  suite('exportAccountsJSON', () => {
+    test('given an empty accounts array, returns "[]"', () => {
+      assertEqual(exportAccountsJSON([]), '[]');
+    });
+
+    test('given accounts, returns minified JSON that round-trips correctly', () => {
+      const accounts = [{ id: 'abc', name: 'Chase', last4: '1234', inputCsvFormat: ['date', 'description', 'amount'] }];
+      const json = exportAccountsJSON(accounts);
+      assertEqual(JSON.parse(json)[0].name, 'Chase');
+      assertEqual(JSON.parse(json)[0].last4, '1234');
+      assertEqual(json.includes('\n'), false);
+    });
+  });
+
+  // ── importAccountsJSON ───────────────────────────────────────────────────
+  suite('importAccountsJSON', () => {
+    test('given valid JSON array of accounts, returns ok:true with accounts', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '1234', inputCsvFormat: ['date', 'description', 'amount'] }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, true);
+      assertEqual(result.accounts[0].name, 'Chase');
+    });
+
+    test('given malformed JSON, returns ok:false with an error string', () => {
+      const result = importAccountsJSON('not json {{');
+      assertEqual(result.ok, false);
+      assertEqual(typeof result.error, 'string');
+    });
+
+    test('given JSON that is not an array, returns ok:false', () => {
+      const result = importAccountsJSON(JSON.stringify({ accounts: [] }));
+      assertEqual(result.ok, false);
+    });
+
+    test('given an account missing name, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', last4: '1234', inputCsvFormat: [] }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, false);
+    });
+
+    test('given an account missing last4, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', inputCsvFormat: [] }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, false);
+    });
+
+    test('given an account missing inputCsvFormat, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '1234' }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, false);
+    });
+
+    test('given inputCsvFormat that is not an array, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '1234', inputCsvFormat: 'bad' }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, false);
+    });
+  });
+
   // ── Render results ────────────────────────────────────────────────────────
   renderResults();
 }

@@ -548,6 +548,33 @@
       </table>
     </div>
 
+    <!-- Export Settings -->
+    <div class="card">
+      <h3 style="margin:0 0 12px;">Export Settings</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Copy the minified JSON below and save it somewhere safe to restore your account configurations in another browser.</p>
+      <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
+      <div id="settings-export-section" style="display:none;margin-top:12px;">
+        <label for="settings-export-field" style="font-size:12px;color:#555;">Minified JSON (copy this)</label>
+        <textarea id="settings-export-field" readonly rows="3" style="font-family:monospace;font-size:11px;margin-top:4px;resize:vertical;"></textarea>
+        <label style="font-size:12px;color:#555;margin-top:10px;display:block;">Pretty-printed preview</label>
+        <pre id="settings-export-pretty" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;overflow:auto;margin-top:4px;white-space:pre-wrap;word-break:break-all;"></pre>
+      </div>
+    </div>
+
+    <!-- Import Settings -->
+    <div class="card">
+      <h3 style="margin:0 0 12px;">Import Settings</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Paste a previously exported JSON blob to replace your current account configurations.</p>
+      <label for="settings-import-field" style="font-size:12px;color:#555;">Paste JSON here</label>
+      <textarea id="settings-import-field" rows="3" placeholder='[{"id":"...","name":"...","last4":"...","inputCsvFormat":[...]}]' style="font-family:monospace;font-size:11px;margin-top:4px;resize:vertical;"></textarea>
+      <div id="settings-import-error" class="alert alert-error" style="display:none;margin-top:8px;"></div>
+      <button class="btn btn-primary btn-sm" id="settings-import-btn" style="margin-top:8px;">Import Settings</button>
+      <div id="settings-import-section" style="display:none;margin-top:12px;">
+        <label style="font-size:12px;color:#555;">Imported configuration (pretty-printed)</label>
+        <pre id="settings-import-pretty" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;overflow:auto;margin-top:4px;white-space:pre-wrap;word-break:break-all;"></pre>
+      </div>
+    </div>
+
     <div class="card" id="settings-form-card" style="display:none;">
       <h3 id="settings-form-title">Add Account</h3>
       <div class="form-row">
@@ -1513,6 +1540,35 @@ document.getElementById('settings-add-btn').addEventListener('click', () => show
 document.getElementById('sf-parse-btn').addEventListener('click', parseHeaderRow);
 document.getElementById('sf-save-btn').addEventListener('click', saveAccountConfig);
 document.getElementById('sf-cancel-btn').addEventListener('click', hideAccountForm);
+document.getElementById('settings-export-btn').addEventListener('click', doExportSettings);
+document.getElementById('settings-import-btn').addEventListener('click', doImportSettings);
+
+function doExportSettings() {
+  const json = exportAccountsJSON(state.userConfig.accounts);
+  document.getElementById('settings-export-field').value = json;
+  document.getElementById('settings-export-pretty').textContent = JSON.stringify(JSON.parse(json), null, 2);
+  document.getElementById('settings-export-section').style.display = 'block';
+}
+
+function doImportSettings() {
+  const raw = document.getElementById('settings-import-field').value.trim();
+  const errEl = document.getElementById('settings-import-error');
+  const result = importAccountsJSON(raw);
+  if (!result.ok) {
+    errEl.textContent = result.error;
+    errEl.style.display = 'block';
+    document.getElementById('settings-import-section').style.display = 'none';
+    return;
+  }
+  result.accounts.forEach(a => { if (!a.id) a.id = crypto.randomUUID(); });
+  state.userConfig.accounts = result.accounts;
+  saveConfig();
+  populateAccountDropdowns();
+  renderSettingsTable();
+  errEl.style.display = 'none';
+  document.getElementById('settings-import-pretty').textContent = JSON.stringify(result.accounts, null, 2);
+  document.getElementById('settings-import-section').style.display = 'block';
+}
 
 function renderSettingsTable() {
   const accounts = state.userConfig.accounts;
@@ -1730,10 +1786,40 @@ populateAccountDropdowns();
 // ══════════════════════════════════════════════════
 //  EXPOSE PURE FUNCTIONS FOR TESTS
 // ══════════════════════════════════════════════════
+function exportAccountsJSON(accounts) {
+  return JSON.stringify(accounts);
+}
+
+function importAccountsJSON(jsonString) {
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonString);
+  } catch (e) {
+    return { ok: false, error: 'Invalid JSON: ' + e.message };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, error: 'Expected a JSON array of accounts.' };
+  }
+  for (let i = 0; i < parsed.length; i++) {
+    const a = parsed[i];
+    if (typeof a.name !== 'string' || !a.name) {
+      return { ok: false, error: `Account at index ${i} is missing a valid "name".` };
+    }
+    if (typeof a.last4 !== 'string' || !a.last4) {
+      return { ok: false, error: `Account at index ${i} is missing a valid "last4".` };
+    }
+    if (!Array.isArray(a.inputCsvFormat)) {
+      return { ok: false, error: `Account at index ${i} is missing a valid "inputCsvFormat" array.` };
+    }
+  }
+  return { ok: true, accounts: parsed };
+}
+
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
+  exportAccountsJSON, importAccountsJSON,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
 </script>
