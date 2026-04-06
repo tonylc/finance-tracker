@@ -369,6 +369,14 @@
         <p style="font-size:12px;color:#c62828;" id="uncategorized-notice" style="display:none;"></p>
       </div>
     </div>
+
+    <div class="card" id="load-export-card" style="display:none;">
+      <div class="flex-between" style="margin-bottom:10px;">
+        <h3 style="margin:0;" id="load-export-title">Exported CSV</h3>
+        <button class="btn btn-sm btn-primary" id="load-copy-btn">Copy</button>
+      </div>
+      <textarea id="load-export-output" rows="12" readonly></textarea>
+    </div>
   </div>
 
   <!-- ══════════════════ BUDGET VIEW ══════════════════ -->
@@ -851,6 +859,10 @@ function sortByDateDesc(transactions) {
   return [...transactions].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+function sortByDateAsc(transactions) {
+  return [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function cycleCategoryByKey(currentValue, key, subcategories) {
   const lower = key.toLowerCase();
   const matches = subcategories.filter(s => s.toLowerCase().startsWith(lower));
@@ -1010,7 +1022,8 @@ function renderLoadSummary() {
     const count = state.transactions.filter(t => t.accountKey === a.key).length;
     const chip = document.createElement('div');
     chip.className = 'account-chip';
-    chip.innerHTML = `${a.key} <span>${count}</span>`;
+    chip.innerHTML = `${a.key} <span>${count}</span> <button class="btn btn-sm btn-secondary chip-export-btn">Export</button>`;
+    chip.querySelector('.chip-export-btn').addEventListener('click', () => handleLoadExport(a.key));
     list.appendChild(chip);
   });
 
@@ -1023,6 +1036,22 @@ function renderLoadSummary() {
     notice.style.display = 'none';
   }
 }
+
+function handleLoadExport(accountKey) {
+  const txs = sortByDateAsc(state.transactions.filter(t => t.accountKey === accountKey));
+  const csv = toCSV(txs);
+  document.getElementById('load-export-title').textContent = `Exported CSV — ${accountKey}`;
+  document.getElementById('load-export-output').value = csv;
+  const card = document.getElementById('load-export-card');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('load-copy-btn').addEventListener('click', () => {
+  const ta = document.getElementById('load-export-output');
+  ta.select();
+  document.execCommand('copy');
+});
 
 // ══════════════════════════════════════════════════
 //  BUDGET VIEW
@@ -1536,7 +1565,7 @@ function handleCatExport() {
   }
 
   errEl.style.display = 'none';
-  const csv = toCSV(state.catSession);
+  const csv = toCSV(sortByDateAsc(state.catSession));
   document.getElementById('export-output').value = csv;
   document.getElementById('cat-export-card').style.display = 'block';
   document.getElementById('cat-export-card').scrollIntoView({ behavior: 'smooth' });
@@ -1829,7 +1858,7 @@ function importAccountsJSON(jsonString) {
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterBySearch, aggregateByCategory,
-  totalSpend, sortByDateDesc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
+  totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
   exportAccountsJSON, importAccountsJSON,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };

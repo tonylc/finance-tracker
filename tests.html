@@ -85,7 +85,8 @@ function runTests() {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
     parseTransaction, deduplicateTransactions, filterByMonth,
     aggregateByCategory, totalSpend, cycleCategoryByKey,
-    validateExport, toCSV, getMonthList, sortByDateDesc, filterBySearch, ALL_SUBS, VALID_CATS,
+    validateExport, toCSV, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
+    exportAccountsJSON, importAccountsJSON, ALL_SUBS, VALID_CATS,
   } = lib;
 
   // ── parseCSV ──────────────────────────────────────────────────────────────
@@ -640,6 +641,34 @@ function runTests() {
       const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '1234', inputCsvFormat: 'bad' }]);
       const result = importAccountsJSON(input);
       assertEqual(result.ok, false);
+    });
+  });
+
+  // ── sortByDateAsc ─────────────────────────────────────────────────────────
+  suite('sortByDateAsc', () => {
+    test('returns transactions sorted oldest-first', () => {
+      const txs = [
+        { date: '2025-03-15', amount: -20 },
+        { date: '2025-01-01', amount: -10 },
+        { date: '2025-02-10', amount: -30 },
+      ];
+      const result = sortByDateAsc(txs);
+      assertEqual(result[0].date, '2025-01-01');
+      assertEqual(result[1].date, '2025-02-10');
+      assertEqual(result[2].date, '2025-03-15');
+    });
+
+    test('does not mutate the original array', () => {
+      const txs = [
+        { date: '2025-03-15', amount: -20 },
+        { date: '2025-01-01', amount: -10 },
+      ];
+      sortByDateAsc(txs);
+      assertEqual(txs[0].date, '2025-03-15');
+    });
+
+    test('given an empty array, returns an empty array', () => {
+      assertEqual(sortByDateAsc([]).length, 0);
     });
   });
 
