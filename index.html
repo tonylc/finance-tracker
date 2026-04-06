@@ -217,6 +217,9 @@
     font-size: 13px;
   }
   .budget-table tr.sub-row td:first-child { padding-left: 28px; }
+  .budget-table tr.tx-row { cursor: pointer; }
+  .budget-table tr.tx-row:hover td { background: #f5f5f5; }
+  .tx-detail-row td { background: #f8f8ff; font-size: 11px; color: #555; padding: 4px 8px 6px 16px; }
 
   /* ── Load view summary ── */
   .accounts-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -400,13 +403,14 @@
 
         <div id="budget-warn" style="display:none;"></div>
 
+        <div id="budget-search-wrap" style="margin-top:16px;">
+          <input id="budget-search" type="search" placeholder="Search transactions…"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+        </div>
+
         <!-- Bar chart panel (default view) -->
         <div id="budget-chart-panel">
           <div id="budget-bars"></div>
-          <div id="budget-search-wrap" style="margin-top:16px;">
-            <input id="budget-search" type="search" placeholder="Search transactions…"
-              style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-          </div>
           <div id="budget-tx-section" style="margin-top:16px;">
             <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Transactions</div>
             <table class="budget-table">
@@ -415,7 +419,7 @@
                   <th>Date</th>
                   <th>Description</th>
                   <th>Category</th>
-                  <th>Account</th>
+                  <th>Fix</th>
                   <th style="text-align:right;">Amount</th>
                 </tr>
               </thead>
@@ -435,7 +439,8 @@
               <tr>
                 <th>Date</th>
                 <th>Description</th>
-                <th>Account</th>
+                <th>Category</th>
+                <th>Fix</th>
                 <th style="text-align:right;">Amount</th>
               </tr>
             </thead>
@@ -815,7 +820,8 @@ function filterBySearch(transactions, query) {
   return transactions.filter(t =>
     t.description.toLowerCase().includes(q) ||
     t.category.toLowerCase().includes(q) ||
-    String(t.amount).includes(q)
+    String(t.amount).includes(q) ||
+    (t.fix && 'fix'.includes(q))
   );
 }
 
@@ -1116,6 +1122,29 @@ function renderBudgetMonth() {
   renderActiveBudgetPanel();
 }
 
+function appendTxRows(tbody, txs) {
+  txs.forEach(t => {
+    const row = document.createElement('tr');
+    row.className = 'tx-row';
+    row.innerHTML = `
+      <td>${t.date}</td>
+      <td>${t.description}</td>
+      <td style="font-size:11px;color:#555;">${t.category || '—'}</td>
+      <td style="font-size:11px;color:#888;">${t.fix ? 'fix' : ''}</td>
+      <td class="td-amount ${t.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(t.amount)}</td>
+    `;
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'tx-detail-row';
+    detailRow.style.display = 'none';
+    detailRow.innerHTML = `<td colspan="5">Account: ${t.accountKey}</td>`;
+    row.addEventListener('click', () => {
+      detailRow.style.display = detailRow.style.display === 'none' ? 'table-row' : 'none';
+    });
+    tbody.appendChild(row);
+    tbody.appendChild(detailRow);
+  });
+}
+
 function renderBudgetTxList(txs) {
   const { grandTotal } = aggregateByCategory(txs, ['Transfer']);
   document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
@@ -1123,23 +1152,14 @@ function renderBudgetTxList(txs) {
 
   const txTbody = document.getElementById('budget-tx-tbody');
   txTbody.innerHTML = '';
-  sortByDateDesc(txs).forEach(t => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${t.date}</td>
-      <td>${t.description}</td>
-      <td style="font-size:11px;color:#555;">${t.category || '—'}</td>
-      <td style="font-size:11px;color:#888;">${t.accountKey}</td>
-      <td class="td-amount ${t.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(t.amount)}</td>
-    `;
-    txTbody.appendChild(row);
-  });
+  appendTxRows(txTbody, sortByDateDesc(txs));
 }
 
 function renderActiveBudgetPanel() {
   const query = document.getElementById('budget-search').value;
   if (budgetSelectedSub !== null) {
-    const txs = sortByDateDesc(currentMonthTx.filter(t => t.category === budgetSelectedSub));
+    const categoryTx = currentMonthTx.filter(t => t.category === budgetSelectedSub);
+    const txs = sortByDateDesc(filterBySearch(categoryTx, query));
     const { grandTotal } = aggregateByCategory(txs, ['Transfer']);
     document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
     document.getElementById('budget-month-tx-count').textContent = txs.length;
@@ -1148,16 +1168,7 @@ function renderActiveBudgetPanel() {
     document.getElementById('budget-detail-panel').style.display = 'block';
     const tbody = document.getElementById('budget-detail-tbody');
     tbody.innerHTML = '';
-    txs.forEach(t => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${t.date}</td>
-        <td>${t.description}</td>
-        <td style="font-size:11px;color:#888;">${t.accountKey}</td>
-        <td class="td-amount ${t.amount < 0 ? 'neg' : 'pos'}">${fmtAmount(t.amount)}</td>
-      `;
-      tbody.appendChild(row);
-    });
+    appendTxRows(tbody, txs);
   } else {
     document.getElementById('budget-chart-panel').style.display = 'block';
     document.getElementById('budget-detail-panel').style.display = 'none';
