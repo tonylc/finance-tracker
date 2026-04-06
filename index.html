@@ -1263,7 +1263,7 @@ function handleCatImport() {
   }
 
   const accountKey = formatAccountKey(account.name, account.last4);
-  state.catSession = dataRows.map(fields => parseTransaction(fields, headerMap, accountKey));
+  state.catSession = sortByDateDesc(dataRows.map(fields => parseTransaction(fields, headerMap, accountKey)));
   selectedIdxs.clear();
   toggleMultiSelect(false);
 
