@@ -739,11 +739,23 @@ function validateImport(rows, headerMap, requireCategory) {
       errors.push(`Row ${rowNum}: description is blank`);
 
     // amount — must be non-blank and parse as a finite number
-    const amtRaw = (fields[headerMap.amount] || '').trim();
-    if (!amtRaw)
-      errors.push(`Row ${rowNum}: amount is blank`);
-    else if (!isFinite(parseFloat(amtRaw.replace(/[$,]/g, ''))))
-      errors.push(`Row ${rowNum}: amount "${amtRaw}" is not a valid number`);
+    const amtIndices = headerMap.amountIndices || [headerMap.amount];
+    const amtVals = amtIndices.map(i => (fields[i] || '').trim());
+    const filled = amtVals.filter(v => v !== '');
+    if (amtIndices.length > 1) {
+      if (filled.length === 0)
+        errors.push(`Row ${rowNum}: amount is blank`);
+      else if (filled.length > 1)
+        errors.push(`Row ${rowNum}: amount is ambiguous (both debit and credit columns have values)`);
+      else if (!isFinite(parseFloat(filled[0].replace(/[$,]/g, ''))))
+        errors.push(`Row ${rowNum}: amount "${filled[0]}" is not a valid number`);
+    } else {
+      const amtRaw = (fields[headerMap.amount] || '').trim();
+      if (!amtRaw)
+        errors.push(`Row ${rowNum}: amount is blank`);
+      else if (!isFinite(parseFloat(amtRaw.replace(/[$,]/g, ''))))
+        errors.push(`Row ${rowNum}: amount "${amtRaw}" is not a valid number`);
+    }
 
     // category
     const cat = (fields[headerMap.category] || '').trim();
@@ -759,7 +771,15 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
   const map = {};
   if (inputCsvFormat) {
     // Positional mapping: array index = CSV column index, value = field name or null
-    inputCsvFormat.forEach((field, i) => { if (field) map[field] = i; });
+    const amtIndices = [];
+    inputCsvFormat.forEach((field, i) => {
+      if (field === 'amount') amtIndices.push(i);
+      else if (field) map[field] = i;
+    });
+    if (amtIndices.length) {
+      map.amountIndices = amtIndices;
+      map.amount = amtIndices[0]; // keep for backwards compat
+    }
   } else {
     // Fallback: match by lowercase header name (preserves existing behaviour)
     headerRow.forEach((h, i) => {
@@ -771,7 +791,10 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
       else if (key === 'fix') map.fix = i;
     });
   }
-  const missing = ['date', 'description', 'amount'].filter(k => map[k] === undefined);
+  // Normalize: ensure amountIndices is always set when amount is known
+  if (map.amount !== undefined && !map.amountIndices) map.amountIndices = [map.amount];
+  const missing = ['date', 'description'].filter(k => map[k] === undefined)
+    .concat(!map.amountIndices ? ['amount'] : []);
   if (missing.length) return { error: `Missing required columns: ${missing.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(', ')}` };
   if (map.category === undefined) map.category = -1; // optional
   if (map.fix === undefined) map.fix = -1;           // optional
@@ -795,7 +818,11 @@ function parseTransaction(fields, headerMap, accountKey) {
       return raw;
     })(),
     description: (fields[headerMap.description] || '').trim(),
-    amount: parseFloat((fields[headerMap.amount] || '0').replace(/[$,]/g, '')) || 0,
+    amount: (() => {
+      const indices = headerMap.amountIndices || [headerMap.amount];
+      const raw = indices.map(i => (fields[i] || '').trim()).find(v => v !== '') || '0';
+      return parseFloat(raw.replace(/[$,]/g, '')) || 0;
+    })(),
     category: cat,
     fix: fixRaw === 'true' || fixRaw === '1' || fixRaw === 'yes',
   };
@@ -1767,10 +1794,17 @@ function saveAccountConfig() {
     inputCsvFormat[parseInt(sel.dataset.colIndex)] = sel.value || null;
   });
 
-  const missing = ['date', 'description', 'amount'].filter(f => !inputCsvFormat.includes(f));
-  if (missing.length) {
+  const required = ['date', 'description', 'amount'];
+  const counts = Object.fromEntries(required.map(f => [f, inputCsvFormat.filter(x => x === f).length]));
+  const missing = required.filter(f => counts[f] === 0);
+  const tooMany = ['date', 'description'].filter(f => counts[f] > 1)
+    .concat(counts.amount > 2 ? ['amount'] : []);
+  if (missing.length || tooMany.length) {
+    const parts = [];
+    if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
+    if (tooMany.length) parts.push(`mapped to too many columns: ${tooMany.join(', ')}`);
     errEl.className = 'alert alert-error';
-    errEl.textContent = `Please assign the following required fields: ${missing.join(', ')}.`;
+    errEl.textContent = `Column mapping error — ${parts.join('; ')}.`;
     errEl.style.display = 'block';
     return;
   }

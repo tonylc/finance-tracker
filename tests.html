@@ -707,6 +707,63 @@ function runTests() {
     });
   });
 
+  // ── buildHeaderMap — multi-amount columns ────────────────────────────────
+  suite('buildHeaderMap — multi-amount columns', () => {
+    test('given inputCsvFormat with two amount columns, amountIndices contains both', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
+      assertEqual(m.amountIndices, [2, 3]);
+      assertEqual(m.amount, 2);
+    });
+
+    test('given inputCsvFormat with one amount column, amountIndices has one element', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'amount']);
+      assertEqual(m.amountIndices, [2]);
+      assertEqual(m.amount, 2);
+    });
+  });
+
+  // ── validateImport — split debit/credit amount ───────────────────────────
+  suite('validateImport — split debit/credit amount columns', () => {
+    const hdr = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
+
+    test('given two amount columns where debit is filled, passes', () => {
+      const r = validateImport([['2025-01-01', 'Coffee', '-4.50', '']], hdr);
+      assert(r.valid);
+    });
+
+    test('given two amount columns where credit is filled, passes', () => {
+      const r = validateImport([['2025-01-01', 'Refund', '', '10.00']], hdr);
+      assert(r.valid);
+    });
+
+    test('given two amount columns both blank, fails with row number', () => {
+      const r = validateImport([['2025-01-01', 'Coffee', '', '']], hdr);
+      assert(!r.valid);
+      assert(r.errors[0].includes('Row 2'));
+    });
+
+    test('given two amount columns both filled, fails with row number', () => {
+      const r = validateImport([['2025-01-01', 'Coffee', '-4.50', '4.50']], hdr);
+      assert(!r.valid);
+      assert(r.errors[0].includes('Row 2'));
+    });
+  });
+
+  // ── parseTransaction — split debit/credit amount ─────────────────────────
+  suite('parseTransaction — split debit/credit amount columns', () => {
+    const hdr = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
+
+    test('picks debit column when credit is blank', () => {
+      const t = parseTransaction(['2025-01-01', 'Coffee', '-4.50', ''], hdr, 'Chase *1234');
+      assertEqual(t.amount, -4.5);
+    });
+
+    test('picks credit column when debit is blank', () => {
+      const t = parseTransaction(['2025-01-01', 'Refund', '', '10.00'], hdr, 'Chase *1234');
+      assertEqual(t.amount, 10);
+    });
+  });
+
   // ── Render results ────────────────────────────────────────────────────────
   renderResults();
 }
