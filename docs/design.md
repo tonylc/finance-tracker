@@ -41,18 +41,23 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 3. Click **Load Transactions**.
 4. The app deduplicates against existing transactions, reports the count added, and shows a summary of loaded accounts with transaction counts.
 
-**Engineering details:**
+#### CSV Import
 
 - The selected account profile provides `inputCsvFormat` — a positional array mapping column index → field name. `buildHeaderMap()` uses this to locate date, description, amount, category, and fix columns by position rather than header name.
 - If the first row of the pasted CSV looks like a header (non-numeric date field), it is skipped automatically.
 - Each imported row is validated by `validateImport()` before being processed. Rows with unparseable dates, blank descriptions, or non-finite amounts are rejected with a row-level error message.
 - Deduplication key: `accountKey|date|description|amount`. Two transactions are considered identical if all four values match. `deduplicateTransactions()` returns the merged array; duplicates are silently skipped (no error).
-- Uncategorized transactions are allowed. A notice is shown after load if any exist, with a link to the Categorize view.
 - `state.transactions` is the single source of truth. It grows monotonically during a session and is never persisted to localStorage.
 
 **Account key format:** `"Account Name *last4"` — produced by `formatAccountKey(name, last4)`.
 
-**Export:** Each account chip in the summary includes an **Export** button. Clicking it calls `handleLoadExport(accountKey)`, which filters `state.transactions` to that account, sorts ascending with `sortByDateAsc()`, serializes with `toCSV()`, and displays the result in `#load-export-card` below the summary. A **Copy** button copies the textarea to clipboard.
+#### Uncategorized Notice
+
+Uncategorized transactions are allowed in the Load view. After import, if any transactions have a blank category, `#uncategorized-notice` is shown with a link to the Categorize view.
+
+#### Per-Account Export
+
+Each account chip in the summary includes an **Export** button. Clicking it calls `handleLoadExport(accountKey)`, which filters `state.transactions` to that account, sorts ascending with `sortByDateAsc()`, serializes with `toCSV()`, and displays the result in `#load-export-card` below the summary. A **Copy** button copies the textarea to clipboard.
 
 ---
 
@@ -69,33 +74,47 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 6. Click any bar to open the detail panel listing every transaction in that category for the month.
 7. Click **← All Categories** to return to the bar chart and transaction list.
 
-**Engineering details:**
+#### Empty State
 
-**Month list generation:** `getMonthList(transactions)` extracts all unique `{ year, month }` pairs (1-based month, 1=January) from transaction dates, sorted chronologically. Transactions with blank or invalid dates are skipped. The result is stored in `budgetMonths[]`; `budgetIdx` tracks the currently displayed entry.
+If `state.transactions` is empty, `#budget-empty` is shown and `#budget-content` is hidden. `renderBudget()` checks `state.transactions.length > 0` before rendering any month data.
 
-**Month filtering:** `filterByMonth(transactions, year, month)` filters the full transaction list to a single calendar month. Month is 1-based. Implementation: `d.getMonth() + 1 === month`.
+#### Month Navigation
 
-**Transaction search:** A search input (`#budget-search`) sits above both panels and is always visible, including during category drill-down. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, `String(amount)`, and the fix flag (`t.fix && 'fix'.includes(q)` — so queries "f", "fi", "fix" return fix-flagged transactions). An empty or whitespace-only query returns all transactions. When a search query is active, the bar chart, banner, and transaction list all update to reflect only the matching transactions.
+`getMonthList(transactions)` extracts all unique `{ year, month }` pairs (1-based month, 1=January) from transaction dates, sorted chronologically. Transactions with blank or invalid dates are skipped. The result is stored in `budgetMonths[]`; `budgetIdx` tracks the currently displayed entry. The **←** / **→** buttons decrement/increment `budgetIdx` and call `renderBudgetMonth()`. The prev button is disabled at `budgetIdx === 0`; the next button is disabled at `budgetIdx === budgetMonths.length - 1`. `budgetMonths` and `budgetIdx` are module-level variables reset on each call to `renderBudget()`. Navigating away from Budget and back resets to the most recent month.
 
-**Bar chart rendering:** `renderBudgetBars(txs)` accepts any transaction array and rebuilds `#budget-bars` from it — making it reusable for both full-month and search-filtered views. Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
+**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+
+#### Transaction Search
+
+`#budget-search` sits above both panels and is always visible, including when the category drill-down is active. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, `String(amount)`, and the fix flag (`t.fix && 'fix'.includes(q)` — so queries "f", "fi", "fix" return fix-flagged transactions). An empty or whitespace-only query returns all transactions. When a search query is active, the bar chart, banner, and transaction list all update to reflect only the matching transactions. In the chart panel it filters all month transactions; in the detail panel it filters within the selected subcategory. The banner (month total, tx count) always reflects the currently visible filtered set.
+
+#### Bar Chart
+
+`renderBudgetBars(txs)` accepts any transaction array and rebuilds `#budget-bars` from it — making it reusable for both full-month and search-filtered views. Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
 
 **Bar colors:**
 - `#43a047` (green) — negative total (expense / money leaving)
 - `#5c6bc0` (blue) — positive total (income / money received)
 
-**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+#### Month Banner
 
-**Banner stats:** `#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card and are written in `renderBudgetMonth()` from `grandTotal` (categorized spend only) and `monthTx.length` (all transactions including uncategorized). They update on every month navigation.
+`#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card and are written in `renderBudgetMonth()` from `grandTotal` (categorized spend, Transfer excluded) and `monthTx.length` (all transactions including uncategorized). They update on every month navigation and on every search query change.
 
-**Search bar:** `#budget-search` sits above both panels and is always visible, including when the category drill-down is active. Typing filters the transaction list in whichever view is active: in the chart panel it filters all month transactions; in the detail panel it filters within the selected subcategory. The banner (month total, tx count) always reflects the currently visible filtered set.
+#### Transfer Exclusion
 
-**Transaction list:** `#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
+Transactions in the **Transfer** parent category (subcategory: "Credit Card Payment") are excluded from `aggregateByCategory()` and therefore from the grand total shown in the banner. They are still counted in `#budget-month-tx-count` and shown in the transaction list.
 
-**Detail panel:** Transactions are filtered to `t.category === sub` (exact subcategory match), then further filtered by the search query via `filterBySearch()`, then sorted by date descending via `sortByDateDesc()`. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). When the user navigates months while the detail panel is open, `renderBudgetMonth()` re-renders the detail view for the same subcategory, so the drill-down persists across navigation. Pressing **← All Categories** clears `budgetSelectedSub` to `null`. Navigating away from Budget and back also resets it to `null`.
+#### Full Transaction List
 
-**Uncategorized warning:** Transactions without a category, and transactions in the **Transfer** parent category (e.g. Credit Card Payment), are excluded from `aggregateByCategory()` and from the grand total. A yellow warning banner is shown if any uncategorized transactions exist in the current month.
+`#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
 
-**Navigation state:** `budgetMonths` and `budgetIdx` are module-level variables reset on each call to `renderBudget()`. Navigating away from Budget and back resets to the most recent month.
+#### Category Drill-Down
+
+Transactions are filtered to `t.category === sub` (exact subcategory match), then further filtered by the search query via `filterBySearch()`, then sorted by date descending via `sortByDateDesc()`. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). When the user navigates months while the detail panel is open, `renderBudgetMonth()` re-renders the detail view for the same subcategory, so the drill-down persists across navigation. Pressing **← All Categories** clears `budgetSelectedSub` to `null`. Navigating away from Budget and back also resets it to `null`.
+
+#### Uncategorized Warning
+
+Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. If any uncategorized transactions exist in the current month, `#budget-warn` is shown with a yellow warning banner. Transfer-category transactions do not trigger this warning.
 
 ---
 
@@ -110,17 +129,49 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 4. Select multiple rows using the checkboxes; a bulk-action bar appears to apply one category to all selected rows at once.
 5. When all rows are categorized, click **Export CSV** to generate a CSV ready to import in Load.
 
-**Engineering details:**
+#### CSV Import
 
-- `state.catSession[]` holds the working rows for the current Categorize session. It is independent of `state.transactions`. `handleCatImport` sorts the session by date descending (`sortByDateDesc`) at population time so the most recent transactions appear first in the review table; all index-based mutations (category changes, keyboard navigation, bulk-select) operate on this sorted array directly.
-- Category dropdowns are `<select>` elements with `<optgroup>` per parent category. The full list of subcategories comes from `CAT_LIST`.
-- **Keyboard cycling (edit mode):** The document keydown listener intercepts letter keys when a row is focused and no input/select has focus — it calls `cycleCategoryByKey(currentValue, key, ALL_SUBS)`, updates `state.catSession`, and then calls `sel.focus()` on the row's `<select>`, entering **edit mode**. While the select is focused, its own `keydown` listener continues cycling on each letter press (no blur between presses). Pressing **ESC** calls `sel.blur()`, returning focus to the document (**navigation mode**). The bulk-assign select (`#cat-bulk-cat`) follows the same pattern.
-- **Bulk edit:** Checkboxes are hidden by default. A `☐ Multi-select` toggle button sits above the table (right-aligned); clicking it shows the checkbox column (`table.multi-select-active .td-check { display: table-cell }`) and the button becomes `☑ Multi-select` (blue tint). Row selection is tracked in `selectedIdxs` (a module-level `Set<number>`); `multiSelectMode` (boolean) tracks whether the column is visible. When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, category dropdown, Apply and Clear. Apply sets the chosen category on all selected rows and clears selection. Turning off multi-select or loading a new import clears selection and hides the column.
-- **Keyboard navigation (navigation mode):** On the Categorize page, `j` and `k` always move the focus cursor down/up regardless of multi-select mode. If no row has focus yet, the cursor seeds from the lowest-indexed selected row, or row 0 if nothing is selected. `x` toggles row selection but only when multi-select is active. These keys fire only when no input/select/textarea has focus. The focused row is highlighted with a purple tint and left border (`tr.row-focused`). `setCatFocus(idx)` updates the cursor and scrolls the row into view without a full table re-render. `focusedIdx` resets to `-1` when multi-select is turned off or a new import is loaded. **Mouse and keyboard share the same cursor:** hovering a row (`mouseenter` on `<tr>`) calls `setCatFocus(i)`, so j/k/x continue from wherever the mouse last landed. If a category `<select>` is focused when the mouse enters a row, it is blurred first (returning to navigation mode) before the cursor updates.
-- Rows with no category assigned are highlighted with `.cat-error` (red border on the select). Selected rows are highlighted with `.row-selected` (blue-tinted background). Focused row: `.row-focused` (purple tint + left border).
-- `validateExport()` blocks export if any row has a blank category, returning the invalid row indices.
-- The exported CSV format: `Date,Description,Amount,Category,Fix` — identical to what Load expects.
-- `toCSV()` handles quoting of fields containing commas, quotes, or newlines. Transactions are sorted date-ascending (`sortByDateAsc()`) before serialization.
+`state.catSession[]` holds the working rows for the current Categorize session. It is independent of `state.transactions`. `handleCatImport` sorts the session by date descending (`sortByDateDesc`) at population time so the most recent transactions appear first in the review table; all index-based mutations (category changes, keyboard navigation, bulk-select) operate on this sorted array directly. Rows with no category assigned are highlighted with `.cat-error` (red border on the select).
+
+#### Fix Flag
+
+Each row has a fix checkbox (`input[data-field="fix"]`). Checking or unchecking it immediately updates `state.catSession[idx].fix`. The fix value is included in the exported CSV and is searchable in the Budget view.
+
+#### Category Assignment
+
+Category dropdowns are `<select>` elements with `<optgroup>` per parent category. The full list of subcategories comes from `CAT_LIST`. Selecting a value updates `state.catSession[idx].category` and removes the `.cat-error` class from the cell.
+
+#### Keyboard Cycling
+
+The document keydown listener intercepts letter keys when a row is focused and no input/select has focus — it calls `cycleCategoryByKey(currentValue, key, ALL_SUBS)`, updates `state.catSession`, and then calls `sel.focus()` on the row's `<select>`, entering **edit mode**. While the select is focused, its own `keydown` listener continues cycling on each letter press (no blur between presses). Pressing **ESC** calls `sel.blur()`, returning focus to the document (**navigation mode**). The bulk-assign select (`#cat-bulk-cat`) follows the same pattern.
+
+#### Keyboard Navigation
+
+On the Categorize page, `j` and `k` always move the focus cursor down/up regardless of multi-select mode. If no row has focus yet, the cursor seeds from the lowest-indexed selected row, or row 0 if nothing is selected. `x` toggles row selection but only when multi-select is active. These keys fire only when no input/select/textarea has focus. The focused row is highlighted with a purple tint and left border (`tr.row-focused`). `setCatFocus(idx)` updates the cursor and scrolls the row into view without a full table re-render. `focusedIdx` resets to `-1` when multi-select is turned off or a new import is loaded. **Mouse and keyboard share the same cursor:** hovering a row (`mouseenter` on `<tr>`) calls `setCatFocus(i)`, so j/k/x continue from wherever the mouse last landed. If a category `<select>` is focused when the mouse enters a row, it is blurred first (returning to navigation mode) before the cursor updates.
+
+#### Multi-Select Toggle
+
+A `☐ Multi-select` toggle button sits above the table (right-aligned); clicking it shows the checkbox column (`table.multi-select-active .td-check { display: table-cell }`) and the button becomes `☑ Multi-select` (blue tint). `multiSelectMode` (boolean) tracks whether the column is visible. Turning off multi-select or loading a new import clears selection and hides the column.
+
+#### Row Selection
+
+Row selection is tracked in `selectedIdxs` (a module-level `Set<number>`). Selected rows are highlighted with `.row-selected` (blue-tinted background). Pressing `x` while a row is focused toggles its selection (multi-select mode only). Clicking a checkbox directly also toggles selection.
+
+#### Bulk Category Assignment
+
+When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, category dropdown, Apply and Clear buttons. Apply sets the chosen category on all selected rows and clears selection.
+
+#### Select All
+
+`#cat-select-all` is a checkbox in the table header. Checking it selects all rows in `state.catSession`; unchecking it clears all selections. Only visible when multi-select mode is active.
+
+#### Export Validation
+
+`validateExport()` blocks export if any row has a blank category, returning the invalid row indices. The export button shows an inline error listing the row numbers that need a category.
+
+#### Export Success
+
+When all rows have a category, clicking **Export CSV** calls `toCSV(sortByDateAsc(state.catSession))`. The resulting CSV uses the `Date,Description,Amount,Category,Fix` format — identical to what Load expects. `toCSV()` handles quoting of fields containing commas, quotes, or newlines. The output is displayed in `#cat-export-card`.
 
 ---
 
@@ -147,18 +198,38 @@ All views are mobile-friendly via a `@media (max-width: 600px)` block. Key adapt
 4. Click **Parse Columns** — the app splits the header and renders a dropdown for each column.
 5. Map each column to: skip, Date, Description, Amount, Category, or Fix.
 6. Click **Save Account**.
-7. Use **Export Settings** to generate a minified JSON blob of all account profiles. Copy it from the read-only textarea; a pretty-printed preview is shown below for review.
-8. Use **Import Settings** to paste a previously exported blob and instantly restore all profiles. A pretty-printed preview of the imported config is shown on success; validation errors appear inline if the JSON is malformed or missing required fields.
+7. Use **Export Settings** to generate a minified JSON blob of all account profiles.
+8. Use **Import Settings** to paste a previously exported blob and instantly restore all profiles.
 
-**Engineering details:**
+Account profiles are stored in `state.userConfig.accounts[]` and persisted to `localStorage` under key `'financeTrackerConfig'`. `inputCsvFormat` is a positional array the length of the bank's header row; each entry is a field name or `null` (skip). Each account gets a UUID `id` on creation.
 
-- Account profiles are stored in `state.userConfig.accounts[]` and persisted to `localStorage` under key `'financeTrackerConfig'`.
-- `inputCsvFormat` is a positional array the length of the bank's header row. Each entry is a field name (`'date'`, `'description'`, `'amount'`, `'category'`, `'fix'`) or `null` (skip).
-- `buildHeaderMap(headerRow, inputCsvFormat)` uses `inputCsvFormat` when provided, ignoring the header values. This allows banks that rename or reorder columns to work correctly.
-- Required fields: Date, Description, Amount. Save is blocked if any are unmapped.
-- Each account gets a UUID `id` on creation. Deleting an account removes it from `state.userConfig.accounts` and from the account dropdowns in Load and Categorize.
-- `exportAccountsJSON(accounts)` serializes `state.userConfig.accounts` to a minified JSON string. The UI layer pretty-prints it for the preview display.
-- `importAccountsJSON(jsonString)` parses and validates the string (see §4). On success the UI layer replaces `state.userConfig.accounts`, assigns any missing `id` values via `crypto.randomUUID()`, calls `saveConfig()`, and re-renders the account table.
+#### Add Account Profile
+
+Clicking **Add Account** shows `#settings-form-card` with a blank form. The user fills in account name and last 4 digits, pastes the CSV header row, clicks **Parse Columns** to generate column dropdowns, maps each column, then clicks **Save Account**. The new profile is pushed to `state.userConfig.accounts`, persisted, and appears in the settings table and account dropdowns.
+
+#### Edit Account Profile
+
+Clicking **Edit** on an existing account row pre-fills the form with the account's current values and shows `#settings-form-title` as "Edit Account". Saving updates the matching entry in `state.userConfig.accounts` by index.
+
+#### Column Mapping Validation
+
+Required fields: Date, Description, Amount. If any are unmapped when **Save Account** is clicked, `#sf-form-error` is shown and the save is blocked. `buildHeaderMap(headerRow, inputCsvFormat)` uses `inputCsvFormat` when provided, ignoring the header values.
+
+#### Last 4 Validation
+
+`isValidLast4(val)` enforces that last4 is a string of exactly 4 digits (`/^\d{4}$/`). Save is blocked with an inline error if the value is shorter, longer, or contains non-digit characters.
+
+#### Delete Account Profile
+
+Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account from `state.userConfig.accounts`, persists the change, and re-renders both the settings table and the account dropdowns in Load and Categorize.
+
+#### Export Settings
+
+`exportAccountsJSON(accounts)` serializes `state.userConfig.accounts` to a minified JSON string. The UI layer shows it in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review.
+
+#### Import Settings
+
+`importAccountsJSON(jsonString)` parses and validates the string (see §4). On success the UI replaces `state.userConfig.accounts`, assigns any missing `id` values via `crypto.randomUUID()`, calls `saveConfig()`, and re-renders the account table. Validation errors appear inline in `#settings-import-error` if the JSON is malformed or any account has an invalid `last4`.
 
 ---
 

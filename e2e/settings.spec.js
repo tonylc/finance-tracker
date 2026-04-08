@@ -21,7 +21,7 @@ async function fillAndSaveAccount(page, { name = 'Test Bank', last4 = '5678', he
   await page.click('#sf-save-btn');
 }
 
-test.describe('4.1-4.4 Add / Edit Account Profile', () => {
+test.describe('Add Account Profile', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('index.html');
     await openAddForm(page);
@@ -34,6 +34,27 @@ test.describe('4.1-4.4 Add / Edit Account Profile', () => {
     // Account appears in settings table
     await expect(page.locator('#settings-tbody')).toContainText('Test Bank');
     await expect(page.locator('#settings-tbody')).toContainText('*5678');
+  });
+});
+
+test.describe('Edit Account Profile', () => {
+  test('editing name and saving updates the account in the table', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await page.click('[data-view="settings"]');
+    await page.click('#settings-tbody button:not(.btn-danger)'); // Edit button
+    await expect(page.locator('#settings-form-title')).toHaveText('Edit Account');
+    await page.fill('#sf-name', 'Updated Bank');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#settings-tbody')).toContainText('Updated Bank');
+    await expect(page.locator('#settings-tbody')).not.toContainText('Chase');
+  });
+});
+
+test.describe('Last 4 Validation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('index.html');
+    await openAddForm(page);
   });
 
   test('last4 with non-digit characters shows validation error and blocks save', async ({ page }) => {
@@ -61,6 +82,13 @@ test.describe('4.1-4.4 Add / Edit Account Profile', () => {
     await page.click('#sf-save-btn');
     await expect(page.locator('#sf-form-error')).toBeVisible();
   });
+});
+
+test.describe('Column Mapping Validation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('index.html');
+    await openAddForm(page);
+  });
 
   test('saving without assigning required columns (Date, Description, Amount) blocks save', async ({ page }) => {
     await page.fill('#sf-name', 'Test Bank');
@@ -74,7 +102,7 @@ test.describe('4.1-4.4 Add / Edit Account Profile', () => {
   });
 });
 
-test.describe('4.5 Delete Account Profile', () => {
+test.describe('Delete Account Profile', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -102,7 +130,7 @@ test.describe('4.5 Delete Account Profile', () => {
   });
 });
 
-test.describe('4.6 Export Settings', () => {
+test.describe('Export Settings', () => {
   test('export button shows JSON textarea containing all account profiles', async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -116,7 +144,7 @@ test.describe('4.6 Export Settings', () => {
   });
 });
 
-test.describe('4.7 Import Settings', () => {
+test.describe('Import Settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('index.html');
     await page.click('[data-view="settings"]');

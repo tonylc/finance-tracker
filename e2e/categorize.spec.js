@@ -9,7 +9,7 @@ async function catImport(page, csv = CAT_CSV.simple) {
   await page.click('#cat-import-btn');
 }
 
-test.describe('3.1 CSV Import — sort order', () => {
+test.describe('CSV Import', () => {
   test('imported transactions are displayed newest-first', async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -23,7 +23,20 @@ test.describe('3.1 CSV Import — sort order', () => {
   });
 });
 
-test.describe('3.3 Category Assignment via Dropdown', () => {
+test.describe('Fix Flag', () => {
+  test('toggling fix checkbox updates state.catSession fix value', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await catImport(page, '2024-03-15,Coffee Roasters,,-4.50');
+    const fixCb = page.locator('#cat-tbody tr[data-idx="0"] input[data-field="fix"]');
+    await expect(fixCb).not.toBeChecked();
+    await fixCb.click();
+    await expect(fixCb).toBeChecked();
+    expect(await page.evaluate(() => state.catSession[0].fix)).toBe(true);
+  });
+});
+
+test.describe('Category Assignment', () => {
   test('clicking category dropdown and selecting a value assigns category to that row', async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -37,7 +50,7 @@ test.describe('3.3 Category Assignment via Dropdown', () => {
   });
 });
 
-test.describe('3.4 Keyboard Cycling — Edit Mode', () => {
+test.describe('Keyboard Cycling', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -76,7 +89,7 @@ test.describe('3.4 Keyboard Cycling — Edit Mode', () => {
   });
 });
 
-test.describe('3.5 Keyboard Navigation — Navigation Mode', () => {
+test.describe('Keyboard Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -114,7 +127,7 @@ test.describe('3.5 Keyboard Navigation — Navigation Mode', () => {
   });
 });
 
-test.describe('3.6 Multi-Select Toggle', () => {
+test.describe('Multi-Select Toggle', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -133,7 +146,7 @@ test.describe('3.6 Multi-Select Toggle', () => {
   });
 });
 
-test.describe('3.7 Row Selection', () => {
+test.describe('Row Selection', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -158,7 +171,7 @@ test.describe('3.7 Row Selection', () => {
   });
 });
 
-test.describe('3.8 Bulk Category Assignment', () => {
+test.describe('Bulk Category Assignment', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -195,13 +208,25 @@ test.describe('3.8 Bulk Category Assignment', () => {
   });
 });
 
-test.describe('3.10-3.11 Export', () => {
-  test.beforeEach(async ({ page }) => {
+test.describe('Select All', () => {
+  test('checking select-all selects every row; unchecking deselects all', async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
+    await catImport(page);
+    await page.click('#cat-multiselect-btn');
+    await page.check('#cat-select-all');
+    const rows = page.locator('#cat-tbody tr[data-idx]');
+    const count = await rows.count();
+    for (let i = 0; i < count; i++) await expect(rows.nth(i)).toHaveClass(/row-selected/);
+    await page.uncheck('#cat-select-all');
+    for (let i = 0; i < count; i++) await expect(rows.nth(i)).not.toHaveClass(/row-selected/);
   });
+});
 
+test.describe('Export Validation', () => {
   test('given rows with uncategorized entries, export button shows validation error', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
     await catImport(page, '2024-03-15,Coffee Roasters,,-4.50');
     // Do not assign any category
     await page.click('#cat-export-btn');
@@ -209,8 +234,12 @@ test.describe('3.10-3.11 Export', () => {
     await expect(page.locator('#cat-export-error')).toContainText('missing a category');
     await expect(page.locator('#cat-export-card')).toBeHidden();
   });
+});
 
+test.describe('Export Success', () => {
   test('given all rows categorized, export generates CSV with correct columns and date-ascending order', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
     // Import 2 rows with different dates
     await catImport(page, '2024-03-20,Whole Foods,,-87.32\n2024-03-15,Coffee Roasters,,-4.50');
     // Assign categories to both rows

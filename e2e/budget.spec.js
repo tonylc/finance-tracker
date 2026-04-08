@@ -9,7 +9,17 @@ async function setup(page, csv = LOAD_CSV.categorized) {
   await switchToBudget(page);
 }
 
-test.describe('2.1 Month Navigation', () => {
+test.describe('Empty State', () => {
+  test('given no transactions loaded, budget shows empty state and hides content', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await page.click('[data-view="budget"]');
+    await expect(page.locator('#budget-empty')).toBeVisible();
+    await expect(page.locator('#budget-content')).toBeHidden();
+  });
+});
+
+test.describe('Month Navigation', () => {
   test('given transactions in multiple months, prev/next arrows navigate and heading updates', async ({ page }) => {
     await setup(page, LOAD_CSV.multiMonth);
     // Start at most recent (March 2024)
@@ -27,7 +37,6 @@ test.describe('2.1 Month Navigation', () => {
 
   test('at the oldest month, prev button is disabled', async ({ page }) => {
     await setup(page, LOAD_CSV.multiMonth);
-    // Navigate to oldest (January)
     await page.click('#budget-prev');
     await page.click('#budget-prev');
     await expect(page.locator('#budget-prev')).toBeDisabled();
@@ -36,34 +45,29 @@ test.describe('2.1 Month Navigation', () => {
 
   test('at the newest month, next button is disabled', async ({ page }) => {
     await setup(page, LOAD_CSV.multiMonth);
-    // Already at newest (March 2024)
     await expect(page.locator('#budget-next')).toBeDisabled();
     await expect(page.locator('#budget-prev')).not.toBeDisabled();
   });
 
   test('navigating away from Budget and back resets to most recent month', async ({ page }) => {
     await setup(page, LOAD_CSV.multiMonth);
-    // Navigate to January
     await page.click('#budget-prev');
     await page.click('#budget-prev');
     await expect(page.locator('#budget-month-label')).toHaveText('January 2024');
-    // Switch away and back
     await page.click('[data-view="load"]');
     await page.click('[data-view="budget"]');
-    // Should reset to most recent (March 2024)
     await expect(page.locator('#budget-month-label')).toHaveText('March 2024');
   });
 });
 
-test.describe('2.3 Transaction Search', () => {
+test.describe('Transaction Search', () => {
   test.beforeEach(async ({ page }) => {
     await setup(page, LOAD_CSV.categorized);
   });
 
   test('given transactions loaded, typing in search filters the transaction list', async ({ page }) => {
     await page.fill('#budget-search', 'whole');
-    const rows = page.locator('#budget-tx-tbody .tx-row');
-    await expect(rows).toHaveCount(1);
+    await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
   });
 
   test('given search query with no matches, transaction list is empty', async ({ page }) => {
@@ -85,7 +89,6 @@ test.describe('2.3 Transaction Search', () => {
 
   test("typing 'fix' returns only transactions with fix === true", async ({ page }) => {
     await page.fill('#budget-search', 'fix');
-    // Only Coffee Roasters has fix=true in LOAD_CSV.categorized
     await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
     await expect(page.locator('#budget-month-tx-count')).toHaveText('1');
   });
@@ -96,7 +99,7 @@ test.describe('2.3 Transaction Search', () => {
   });
 });
 
-test.describe('2.4 Bar Chart', () => {
+test.describe('Bar Chart', () => {
   test.beforeEach(async ({ page }) => {
     await setup(page, LOAD_CSV.categorized);
   });
@@ -118,18 +121,19 @@ test.describe('2.4 Bar Chart', () => {
   });
 });
 
-test.describe('2.5 Month Banner', () => {
+test.describe('Month Banner', () => {
   test('banner shows correct total and transaction count for the selected month', async ({ page }) => {
     await setup(page, LOAD_CSV.categorized);
     // 3 transactions totalling -$95.07 (no Transfers)
     await expect(page.locator('#budget-month-total-banner')).toHaveText('-$95.07');
     await expect(page.locator('#budget-month-tx-count')).toHaveText('3');
   });
+});
 
-  test('Transfer-category transactions are excluded from the total', async ({ page }) => {
+test.describe('Transfer Exclusion', () => {
+  test('Credit Card Payment is excluded from grand total but counted in tx count', async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
-    // Load with a Transfer transaction mixed in
     const csvWithTransfer = [
       '2024-03-15,Coffee Roasters,-4.50,Coffee / Bakery,false',
       '2024-03-10,CC Payment,-200.00,Credit Card Payment,false',
@@ -142,7 +146,7 @@ test.describe('2.5 Month Banner', () => {
   });
 });
 
-test.describe('2.7 Full Transaction List', () => {
+test.describe('Full Transaction List', () => {
   test.beforeEach(async ({ page }) => {
     await setup(page, LOAD_CSV.categorized);
   });
@@ -166,7 +170,7 @@ test.describe('2.7 Full Transaction List', () => {
   });
 });
 
-test.describe('2.8 Category Drill-Down', () => {
+test.describe('Category Drill-Down', () => {
   test.beforeEach(async ({ page }) => {
     await setup(page, LOAD_CSV.categorized);
   });
@@ -180,31 +184,24 @@ test.describe('2.8 Category Drill-Down', () => {
   });
 
   test('search in drill-down filters within the selected subcategory only', async ({ page }) => {
-    // Open Coffee / Bakery drill-down (2 rows: Coffee Roasters + Starbucks)
     await page.locator('#budget-bars .budget-bar-row').filter({ hasText: 'Coffee / Bakery' }).click();
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(2);
-    // Search for 'roasters' — should show only 1
     await page.fill('#budget-search', 'roasters');
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(1);
   });
 
   test('navigating months while drill-down is open re-renders detail for same subcategory', async ({ page }) => {
-    // Use multiMonth CSV so there are multiple months to navigate
     await seedAccounts(page);
     await page.goto('index.html');
-    // Load categorized data in Jan and Mar
     const multiCatCsv = [
       '2024-01-10,January Coffee,-3.00,Coffee / Bakery,false',
       '2024-03-15,March Coffee,-4.50,Coffee / Bakery,false',
     ].join('\n');
     await loadTransactions(page, multiCatCsv);
     await switchToBudget(page);
-    // Open Coffee / Bakery drill-down
     await page.locator('#budget-bars .budget-bar-row').filter({ hasText: 'Coffee / Bakery' }).click();
     await expect(page.locator('#budget-detail-title')).toHaveText('Coffee / Bakery');
-    // Navigate to previous month (January)
     await page.click('#budget-prev');
-    // Still in drill-down, now showing January's data
     await expect(page.locator('#budget-detail-title')).toHaveText('Coffee / Bakery');
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(1);
     await expect(page.locator('#budget-detail-tbody .tx-row').first()).toContainText('January Coffee');
@@ -229,10 +226,8 @@ test.describe('2.8 Category Drill-Down', () => {
     await page.fill('#budget-search', 'fix');
     await expect(page.locator('#budget-month-tx-count')).toHaveText('1');
     await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
-    // Partial prefix 'fi' also works
     await page.fill('#budget-search', 'fi');
     await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
-    // Clear restores full list
     await page.fill('#budget-search', '');
     await expect(page.locator('#budget-month-tx-count')).toHaveText('3');
   });
@@ -242,7 +237,6 @@ test.describe('2.8 Category Drill-Down', () => {
     await page.locator('#budget-bars .budget-bar-row').filter({ hasText: 'Coffee / Bakery' }).click();
     await expect(page.locator('#budget-detail-panel')).toBeVisible();
     await expect(page.locator('#budget-detail-title')).toHaveText('Coffee / Bakery');
-    // Banner and count reflect search + category filter
     await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
     await expect(page.locator('#budget-month-total-banner')).toHaveText('-$7.75');
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(2);
@@ -251,12 +245,10 @@ test.describe('2.8 Category Drill-Down', () => {
   test('search within drill-down updates banner and list in sync', async ({ page }) => {
     await page.locator('#budget-bars .budget-bar-row').filter({ hasText: 'Coffee / Bakery' }).click();
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(2);
-    // Search for 'roasters'
     await page.fill('#budget-search', 'roasters');
     await expect(page.locator('#budget-month-tx-count')).toHaveText('1');
     await expect(page.locator('#budget-month-total-banner')).toHaveText('-$4.50');
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(1);
-    // Clear search — restores drill-down with 2 rows
     await page.fill('#budget-search', '');
     await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(2);
@@ -272,11 +264,10 @@ test.describe('2.8 Category Drill-Down', () => {
   });
 });
 
-test.describe('2.9 Uncategorized Warning', () => {
+test.describe('Uncategorized Warning', () => {
   test('given a month with uncategorized transactions, yellow warning banner appears', async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
-    // Inject an uncategorized transaction directly via page.evaluate after load
     // Inject an uncategorized transaction directly (state is global, not on window)
     await page.evaluate(() => {
       state.transactions = [{

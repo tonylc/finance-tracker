@@ -1,7 +1,7 @@
 const { test, expect } = require('playwright/test');
 const { ACCOUNT, LOAD_CSV, seedAccounts, loadTransactions } = require('./seed');
 
-test.describe('1.1 CSV Import', () => {
+test.describe('CSV Import', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -44,7 +44,7 @@ test.describe('1.1 CSV Import', () => {
   });
 });
 
-test.describe('1.2 Uncategorized Notice', () => {
+test.describe('Uncategorized Notice', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');
@@ -58,7 +58,7 @@ test.describe('1.2 Uncategorized Notice', () => {
   });
 });
 
-test.describe('1.3 Per-Account Export', () => {
+test.describe('Per-Account Export', () => {
   test.beforeEach(async ({ page }) => {
     await seedAccounts(page);
     await page.goto('index.html');

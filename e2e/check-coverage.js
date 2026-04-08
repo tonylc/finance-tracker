@@ -1,87 +1,87 @@
 /**
  * check-coverage.js
  *
- * Validates that every test.describe('N.M Feature Name') in e2e/*.spec.js has
- * coverage in docs/design.md. The mapping is:
- *   1.x → design.md § 2.1 Load
- *   2.x → design.md § 2.2 Budget
- *   3.x → design.md § 2.3 Categorize
- *   4.x → design.md § 2.5 Settings
+ * Validates that every `#### Feature Name` heading in the mapped design.md section
+ * has a corresponding `test.describe('Feature Name', ...)` in the mapped spec file,
+ * and vice-versa.
  *
- * For each describe block the feature keywords (words from the name, ignoring
- * the N.M prefix) must appear in the corresponding design.md section.
+ * Mapping:
+ *   load.spec.js       ↔  ### 2.1 Load
+ *   budget.spec.js     ↔  ### 2.2 Budget
+ *   categorize.spec.js ↔  ### 2.3 Categorize
+ *   settings.spec.js   ↔  ### 2.5 Settings
+ *
+ * Adding a feature: add `#### Feature Name` in design.md AND
+ *                       `test.describe('Feature Name', ...)` in the spec file.
+ * Removing a feature: delete both — no gaps, no renumbering.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const designMdPath = path.join(__dirname, '../docs/design.md');
-const designMd = fs.readFileSync(designMdPath, 'utf8');
-
-// Split design.md into labelled sections
-const sections = {
-  load: extractSection(designMd, '### 2.1 Load'),
-  budget: extractSection(designMd, '### 2.2 Budget'),
-  categorize: extractSection(designMd, '### 2.3 Categorize'),
-  settings: extractSection(designMd, '### 2.5 Settings'),
+const SECTION_MAP = {
+  'load.spec.js':       '### 2.1 Load',
+  'budget.spec.js':     '### 2.2 Budget',
+  'categorize.spec.js': '### 2.3 Categorize',
+  'settings.spec.js':   '### 2.5 Settings',
 };
 
+const designMd = fs.readFileSync(path.join(__dirname, '../docs/design.md'), 'utf8');
+
 function extractSection(md, heading) {
-  const start = md.indexOf(heading);
+  const start = md.indexOf('\n' + heading);
   if (start === -1) return '';
-  // Find next same-level heading (###) or end of file
-  const rest = md.slice(start + heading.length);
-  const nextHeading = rest.search(/\n###\s/);
-  return nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+  const rest = md.slice(start + heading.length + 1);
+  const next = rest.search(/\n###\s/);
+  return next === -1 ? rest : rest.slice(0, next);
 }
 
-const TAB_MAP = { '1': 'load', '2': 'budget', '3': 'categorize', '4': 'settings' };
-
-// Collect all test.describe('N.M ...') from spec files
-const specFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.spec.js'));
-const describes = [];
-
-for (const f of specFiles) {
-  const src = fs.readFileSync(path.join(__dirname, f), 'utf8');
-  for (const m of src.matchAll(/test\.describe\(['"]([^'"]+)['"]/g)) {
-    describes.push(m[1]);
-  }
+function extractH4Headings(sectionText) {
+  return [...sectionText.matchAll(/^#### (.+)$/gm)].map(m => m[1].trim());
 }
 
-let missing = 0;
+function extractDescribes(src) {
+  return [...src.matchAll(/test\.describe\(['"]([^'"]+)['"]/g)].map(m => m[1]);
+}
 
-for (const desc of describes) {
-  const m = desc.match(/^(\d+)\.(\d+)\s+(.*)/);
-  if (!m) continue; // skip describes without N.M prefix
+let problems = 0;
 
-  const tabKey = TAB_MAP[m[1]];
-  if (!tabKey) {
-    console.warn(`⚠  Unknown tab prefix '${m[1]}' in: "${desc}"`);
-    missing++;
+for (const [specFile, sectionHeading] of Object.entries(SECTION_MAP)) {
+  const specPath = path.join(__dirname, specFile);
+  if (!fs.existsSync(specPath)) {
+    console.warn(`⚠  Spec file not found: ${specFile}`);
+    problems++;
     continue;
   }
 
-  const section = sections[tabKey];
+  const section = extractSection(designMd, sectionHeading);
   if (!section) {
-    console.warn(`⚠  design.md section for tab '${tabKey}' not found`);
-    missing++;
+    console.warn(`⚠  design.md section not found: "${sectionHeading}"`);
+    problems++;
     continue;
   }
 
-  // Check that at least one significant keyword from the feature name appears
-  // in the design.md section (case-insensitive). Stop-words are excluded.
-  const stopWords = new Set(['and', 'or', 'the', 'a', 'an', 'in', 'of', 'to', 'for', 'via', 'with', 'per']);
-  const keywords = m[3].split(/[\s\/\-–—]+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase()));
-  const lowerSection = section.toLowerCase();
-  const found = keywords.some(kw => lowerSection.includes(kw.toLowerCase()));
+  const designFeatures = extractH4Headings(section);
+  const testDescribes = extractDescribes(fs.readFileSync(specPath, 'utf8'));
 
-  if (!found) {
-    console.warn(`⚠  No design.md coverage for: "${desc}" (checked keywords: ${keywords.join(', ')})`);
-    missing++;
+  // Uncovered: in design but no test.describe
+  for (const feat of designFeatures) {
+    if (!testDescribes.includes(feat)) {
+      console.warn(`⚠  [${specFile}] Uncovered feature in design.md: "${feat}"`);
+      problems++;
+    }
+  }
+
+  // Orphaned: test.describe but no design #### heading
+  for (const desc of testDescribes) {
+    if (!designFeatures.includes(desc)) {
+      console.warn(`⚠  [${specFile}] Orphaned test.describe (no design.md heading): "${desc}"`);
+      problems++;
+    }
   }
 }
 
-if (missing === 0) {
-  console.log('✅  All test.describe blocks have design.md coverage');
+if (problems === 0) {
+  console.log('✅  All test.describe blocks have matching design.md headings (and vice versa)');
 }
-process.exit(missing > 0 ? 1 : 0);
+process.exit(problems > 0 ? 1 : 0);
