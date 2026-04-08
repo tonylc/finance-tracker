@@ -76,3 +76,16 @@ The doc must stay in sync with the code — it is the authoritative reference fo
 Commit the updated design doc in the same commit as the code change it describes, or as an immediate follow-up commit if the code change was already committed.
 
 Run `/update-design-doc` to invoke this step manually at any time.
+
+## E2E Testing — Playwright
+
+E2E tests live in `e2e/*.spec.js`. Each `test.describe` label starts with `N.M Feature Name`, where `N.M` maps to a section in `docs/design.md`:
+- `1.x` → Load tab (§ 2.1)
+- `2.x` → Budget tab (§ 2.2)
+- `3.x` → Categorize tab (§ 2.3)
+- `4.x` → Settings tab (§ 2.5)
+
+**When adding or changing a feature section in `docs/design.md`, the corresponding `test.describe` block in `e2e/*.spec.js` must be added or updated in the same commit.**
+
+Run coverage check: `node e2e/check-coverage.js`  
+Run all E2E tests: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js`
