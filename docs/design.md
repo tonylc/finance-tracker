@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-06 (budget search always visible, unified columns, fix label + searchable, row-click expand; account settings export / import; Load page account export; date-ascending CSV exports)
+> **Last updated:** 2026-04-08 (split debit/credit amount columns: buildHeaderMap amountIndices, validateImport ambiguity check, parseTransaction multi-column pick, saveAccountConfig allows 1–2 amount mappings)
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -45,7 +45,7 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 - The selected account profile provides `inputCsvFormat` — a positional array mapping column index → field name. `buildHeaderMap()` uses this to locate date, description, amount, category, and fix columns by position rather than header name.
 - If the first row of the pasted CSV looks like a header (non-numeric date field), it is skipped automatically.
-- Each imported row is validated by `validateImport()` before being processed. Rows with unparseable dates, blank descriptions, or non-finite amounts are rejected with a row-level error message.
+- Each imported row is validated by `validateImport()` before being processed. Rows with unparseable dates, blank descriptions, or non-finite amounts are rejected with a row-level error message. For split debit/credit layouts (two columns mapped to `amount`), exactly one column must be non-blank per row; both-blank and both-filled are also validation errors.
 - Deduplication key: `accountKey|date|description|amount`. Two transactions are considered identical if all four values match. `deduplicateTransactions()` returns the merged array; duplicates are silently skipped (no error).
 - `state.transactions` is the single source of truth. It grows monotonically during a session and is never persisted to localStorage.
 
@@ -213,7 +213,7 @@ Clicking **Edit** on an existing account row pre-fills the form with the account
 
 #### Column Mapping Validation
 
-Required fields: Date, Description, Amount. If any are unmapped when **Save Account** is clicked, `#sf-form-error` is shown and the save is blocked. `buildHeaderMap(headerRow, inputCsvFormat)` uses `inputCsvFormat` when provided, ignoring the header values.
+Required fields: Date, Description, Amount. If any are unmapped when **Save Account** is clicked, `#sf-form-error` is shown and the save is blocked. `amount` may be mapped to 1 or 2 columns (split debit/credit layout); mapping it to 3+ columns is rejected. Date and Description must each map to exactly 1 column. `buildHeaderMap(headerRow, inputCsvFormat)` uses `inputCsvFormat` when provided, ignoring the header values.
 
 #### Last 4 Validation
 
@@ -256,7 +256,7 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
   id:             string,   // UUID
   name:           string,   // e.g. "Chase Checking"
   last4:          string,   // 4-digit string
-  inputCsvFormat: Array,    // e.g. ["date", null, "description", "amount", "category", "fix"]
+  inputCsvFormat: Array,    // e.g. ["date", null, "description", "amount", "category", "fix"]; "amount" may appear twice for split debit/credit layouts
 }
 ```
 
@@ -291,9 +291,9 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `formatAccountKey` | `(name, last4) → string` | Returns `"Name *last4"`. |
-| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount, category, fix }` where `category` and `fix` default to `-1` if absent. Returns `{ error: "Missing required columns: Date, Description, ..." }` (capitalized) if a required field is missing. |
-| `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. Optionally checks category. Returns error strings with 1-based row numbers. |
-| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. Strips `$` and commas from amount. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
+| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount, amountIndices, category, fix }` where `amountIndices` is the array of all column indices mapped to amount (always set; 1 entry for single-column, 2 for split debit/credit), `category` and `fix` default to `-1` if absent. Returns `{ error: "Missing required columns: Date, Description, ..." }` (capitalized) if a required field is missing. |
+| `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. For split debit/credit maps (`headerMap.amountIndices.length > 1`), exactly one amount column must be non-blank per row — both-blank → `'amount is blank'`, both-filled → `'amount is ambiguous (both debit and credit columns have values)'`. Optionally checks category. Returns error strings with 1-based row numbers. |
+| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. Strips `$` and commas from amount; when `headerMap.amountIndices` contains multiple columns, picks the first non-blank value. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
 | `deduplicateTransactions` | `(existing: Transaction[], incoming: Transaction[]) → Transaction[]` | Merges arrays; skips incoming entries that match an existing `accountKey|date|description|amount` key. |
 
 ### Filtering & Aggregation
