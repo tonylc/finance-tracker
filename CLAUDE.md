@@ -65,7 +65,12 @@ Apply this workflow for:
 
 Pure refactors must always land in a **separate commit** before feature changes. Never mix a refactor with a feature in the same commit.
 
-**Before every commit:** Run `node /home/user/finance-tracker/run-tests.js` and confirm all tests pass. Never commit with a failing test suite.
+**Before every commit:** Run both suites and confirm all tests pass. Never commit with a failing test suite.
+
+```bash
+node /home/user/finance-tracker/run-tests.js
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js
+```
 
 ## Design Doc — Required After Every Commit
 
@@ -79,13 +84,18 @@ Run `/update-design-doc` to invoke this step manually at any time.
 
 ## E2E Testing — Playwright
 
-E2E tests live in `e2e/*.spec.js`. Each `test.describe` label starts with `N.M Feature Name`, where `N.M` maps to a section in `docs/design.md`:
-- `1.x` → Load tab (§ 2.1)
-- `2.x` → Budget tab (§ 2.2)
-- `3.x` → Categorize tab (§ 2.3)
-- `4.x` → Settings tab (§ 2.5)
+E2E tests live in `e2e/*.spec.js`. Each `test.describe` label uses a plain feature name (no numbers) matching the `#### Feature Name` sub-heading in the corresponding `docs/design.md` section:
 
-**When adding or changing a feature section in `docs/design.md`, the corresponding `test.describe` block in `e2e/*.spec.js` must be added or updated in the same commit.**
+| Spec file | design.md section |
+|-----------|-------------------|
+| `load.spec.js` | `### 2.1 Load` |
+| `budget.spec.js` | `### 2.2 Budget` |
+| `categorize.spec.js` | `### 2.3 Categorize` |
+| `settings.spec.js` | `### 2.5 Settings` |
+
+**When adding or changing a feature, add/update both the `#### Feature Name` heading in `docs/design.md` and the matching `test.describe` block in the spec file in the same commit.**
+
+Run coverage check: `node e2e/check-coverage.js`
 
 Run coverage check: `node e2e/check-coverage.js`  
 Run all E2E tests: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js`
