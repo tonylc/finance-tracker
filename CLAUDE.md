@@ -23,6 +23,8 @@ When asked to implement a feature or fix, produce a written plan that includes a
 - **Unit tests:** `suite()`/`test()`/`assert()` blocks for `tests.html`
 - **E2E tests:** `test.describe()`/`test()` blocks for the appropriate `e2e/*.spec.js` file
 
+Also include a **"Design Doc Changes"** section showing exactly what will be added, changed, or removed in `docs/design.md` — new `#### Feature Name` headings, updated engineering specs, revised data shapes, etc.
+
 Use descriptive test names that read like behavior specs:
 - `'given <context>, when <action>, <expected result>'`
 - or a plain declarative statement of the expected behavior
@@ -59,14 +61,18 @@ test.describe('Feature Name', () => {
 
 Once the user approves, proceed in this strict order:
 
-1. **Write both sets of failing tests first.**
+1. **Update `docs/design.md`** with the approved changes from the "Design Doc Changes" section.
+
+2. **Write both sets of failing tests.**
    - Add the approved `suite()`/`test()` blocks to `tests.html`, inserted before the `  renderResults()` call and after the last existing suite. Use the existing comment separator style (`// ── SuiteName ──...`).
    - Add the approved `test.describe()`/`test()` blocks to the appropriate `e2e/*.spec.js` file.
    - Run `/tests` — both the new unit tests and the new E2E tests must fail at this point.
 
-2. **Implement the source code.** Make the changes to `index.html` needed to make the new tests pass.
+3. **Implement the source code.** Make the changes to `index.html` needed to make the new tests pass.
 
-3. **Verify all tests pass.** Run `/tests` and confirm both suites are green before committing.
+4. **Verify all tests pass.** Run `/tests` and confirm both suites are green before committing.
+
+5. **If implementation required changes** from the approved plan (different function signature, new data field, revised behaviour), go back and update `docs/design.md` and the tests to match before committing.
 
 ### Scope
 
@@ -80,16 +86,6 @@ Apply this workflow for:
 Pure refactors must always land in a **separate commit** before feature changes. Never mix a refactor with a feature in the same commit.
 
 **Before every commit:** Run `/tests` and confirm both suites pass. Never commit with a failing test suite.
-
-## Design Doc — Required After Every Commit
-
-After every commit, update `docs/design.md` to reflect the current state of the code. The doc is structured as a **product spec** (what the product does and why, written for a reader who hasn't seen the code) with a **detailed engineering specification** beneath each section (data shapes, function signatures, algorithms, constraints).
-
-The doc must stay in sync with the code — it is the authoritative reference for any future work.
-
-Commit the updated design doc in the same commit as the code change it describes, or as an immediate follow-up commit if the code change was already committed.
-
-Run `/update-design-doc` to invoke this step manually at any time.
 
 ## E2E Testing — Playwright
 
