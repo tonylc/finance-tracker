@@ -18,7 +18,10 @@ For any task that involves adding or changing application behavior, follow this 
 
 ### Phase 1 — Plan with Test Specifications (before writing any code)
 
-When asked to implement a feature or fix, produce a written plan that includes a **"Test Specifications"** section. This section must contain the actual test code — not pseudocode, not a description of tests, but the real `suite()`/`test()`/`assert()` blocks that will be pasted into `tests.html`.
+When asked to implement a feature or fix, produce a written plan that includes a **"Test Specifications"** section. This section must contain the actual test code for **both** suites — not pseudocode, not descriptions, but the real blocks that will be pasted into the files:
+
+- **Unit tests:** `suite()`/`test()`/`assert()` blocks for `tests.html`
+- **E2E tests:** `test.describe()`/`test()` blocks for the appropriate `e2e/*.spec.js` file
 
 Use descriptive test names that read like behavior specs:
 - `'given <context>, when <action>, <expected result>'`
@@ -26,6 +29,7 @@ Use descriptive test names that read like behavior specs:
 
 Example Test Specifications section:
 
+**Unit tests (`tests.html`):**
 ```javascript
 suite('formatCurrency', () => {
   test('given a negative number, formats with minus sign and two decimals', () => {
@@ -35,9 +39,16 @@ suite('formatCurrency', () => {
   test('given zero, returns $0.00', () => {
     assertEqual(formatCurrency(0), '$0.00');
   });
+});
+```
 
-  test('given a positive number, formats with dollar sign and commas', () => {
-    assertEqual(formatCurrency(9999.99), '$9,999.99');
+**E2E tests (`e2e/load.spec.js` or whichever spec applies):**
+```javascript
+test.describe('Feature Name', () => {
+  test('given context, when action, expected result', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    // ...
   });
 });
 ```
@@ -48,11 +59,14 @@ suite('formatCurrency', () => {
 
 Once the user approves, proceed in this strict order:
 
-1. **Write the failing tests first.** Add the approved `suite()`/`test()` blocks to `tests.html`, inserted before the `  renderResults()` call and after the last existing suite. Use the existing comment separator style (`// ── SuiteName ──...`). Run `node /home/user/finance-tracker/run-tests.js` — the new tests must fail at this point.
+1. **Write both sets of failing tests first.**
+   - Add the approved `suite()`/`test()` blocks to `tests.html`, inserted before the `  renderResults()` call and after the last existing suite. Use the existing comment separator style (`// ── SuiteName ──...`).
+   - Add the approved `test.describe()`/`test()` blocks to the appropriate `e2e/*.spec.js` file.
+   - Run `/tests` — both the new unit tests and the new E2E tests must fail at this point.
 
 2. **Implement the source code.** Make the changes to `index.html` needed to make the new tests pass.
 
-3. **Verify all tests pass.** Run `node /home/user/finance-tracker/run-tests.js` and confirm the full suite is green before committing.
+3. **Verify all tests pass.** Run `/tests` and confirm both suites are green before committing.
 
 ### Scope
 
@@ -65,12 +79,7 @@ Apply this workflow for:
 
 Pure refactors must always land in a **separate commit** before feature changes. Never mix a refactor with a feature in the same commit.
 
-**Before every commit:** Run both suites and confirm all tests pass. Never commit with a failing test suite.
-
-```bash
-node /home/user/finance-tracker/run-tests.js
-PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js
-```
+**Before every commit:** Run `/tests` and confirm both suites pass. Never commit with a failing test suite.
 
 ## Design Doc — Required After Every Commit
 
@@ -96,6 +105,4 @@ E2E tests live in `e2e/*.spec.js`. Each `test.describe` label uses a plain featu
 **When adding or changing a feature, add/update both the `#### Feature Name` heading in `docs/design.md` and the matching `test.describe` block in the spec file in the same commit.**
 
 Run coverage check: `node e2e/check-coverage.js`
-
-Run coverage check: `node e2e/check-coverage.js`  
-Run all E2E tests: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js`
+Run all tests: `/tests`
