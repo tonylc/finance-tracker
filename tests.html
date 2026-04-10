@@ -86,219 +86,12 @@ function runTests() {
     parseTransaction, deduplicateTransactions, filterByMonth,
     aggregateByCategory, totalSpend, cycleCategoryByKey,
     validateExport, toCSV, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
-    exportAccountsJSON, importAccountsJSON, ALL_SUBS, VALID_CATS,
+    exportAccountsJSON, importAccountsJSON, isValidLast4, ALL_SUBS, VALID_CATS,
   } = lib;
 
-  // ── parseCSV ──────────────────────────────────────────────────────────────
-  suite('parseCSV', () => {
-    test('returns empty array for blank input', () => {
-      assertEqual(parseCSV(''), []);
-      assertEqual(parseCSV('   '), []);
-      assertEqual(parseCSV(null), []);
-    });
-
-    test('parses simple CSV', () => {
-      const rows = parseCSV('a,b,c\n1,2,3');
-      assertEqual(rows.length, 2);
-      assertEqual(rows[0], ['a', 'b', 'c']);
-      assertEqual(rows[1], ['1', '2', '3']);
-    });
-
-    test('handles quoted fields with embedded commas', () => {
-      const rows = parseCSV('"hello, world",foo,bar');
-      assertEqual(rows[0][0], 'hello, world');
-      assertEqual(rows[0][1], 'foo');
-    });
-
-    test('handles Windows CRLF line endings', () => {
-      const rows = parseCSV('a,b\r\n1,2\r\n3,4');
-      assertEqual(rows.length, 3);
-    });
-
-    test('strips BOM', () => {
-      const rows = parseCSV('\uFEFFDate,Desc\n2025-01-01,Foo');
-      assertEqual(rows[0][0], 'Date');
-    });
-
-    test('handles escaped quotes inside quoted fields', () => {
-      const rows = parseCSV('"say ""hello""",world');
-      assertEqual(rows[0][0], 'say "hello"');
-    });
-
-    test('skips blank lines', () => {
-      const rows = parseCSV('a,b\n\n1,2\n\n');
-      assertEqual(rows.length, 2);
-    });
-  });
-
-  // ── formatAccountKey ──────────────────────────────────────────────────────
-  suite('formatAccountKey', () => {
-    test('basic format', () => {
-      assertEqual(formatAccountKey('Chase', '7515'), 'Chase *7515');
-    });
-
-    test('account with parentheses', () => {
-      assertEqual(formatAccountKey('Citi (tony)', '1003'), 'Citi (tony) *1003');
-    });
-
-    test('trims whitespace', () => {
-      assertEqual(formatAccountKey('  BofA  ', '  1884  '), 'BofA *1884');
-    });
-  });
-
-  // ── buildHeaderMap ────────────────────────────────────────────────────────
-  suite('buildHeaderMap', () => {
-    test('maps standard headers case-insensitively', () => {
-      const m = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
-      assertEqual(m.date, 0);
-      assertEqual(m.description, 1);
-      assertEqual(m.amount, 2);
-      assertEqual(m.category, 3);
-      assertEqual(m.fix, 4);
-    });
-
-    test('returns error if required column missing', () => {
-      const m = buildHeaderMap(['Date', 'Amount']); // missing Description
-      assert(m.error, 'should return error');
-      assert(m.error.includes('Description'), 'error mentions missing column');
-    });
-
-    test('category and fix default to -1 when absent', () => {
-      const m = buildHeaderMap(['Date', 'Description', 'Amount']);
-      assertEqual(m.category, -1);
-      assertEqual(m.fix, -1);
-    });
-  });
-
-  // ── validateImport ────────────────────────────────────────────────────────
-  suite('validateImport', () => {
-    const hdr = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
-
-    test('passes when all categories are valid', () => {
-      const rows = [['2025-01-01', 'Test', '-10', 'Groceries', 'false']];
-      const r = validateImport(rows, hdr);
-      assert(r.valid);
-      assertEqual(r.errors.length, 0);
-    });
-
-    test('passes when category is empty', () => {
-      const rows = [['2025-01-01', 'Test', '-10', '', 'false']];
-      const r = validateImport(rows, hdr);
-      assert(r.valid);
-    });
-
-    test('fails with row number when category is invalid', () => {
-      const rows = [
-        ['2025-01-01', 'Test', '-10', 'InvalidCat', 'false'],
-        ['2025-01-02', 'Test2', '-5', 'Groceries', 'false'],
-        ['2025-01-03', 'Test3', '-8', 'BadCategory', 'false'],
-      ];
-      const r = validateImport(rows, hdr);
-      assert(!r.valid);
-      assertEqual(r.errors.length, 2);
-      assert(r.errors[0].includes('Row 2'), 'mentions row 2');
-      assert(r.errors[1].includes('Row 4'), 'mentions row 4');
-    });
-
-    test('error message includes the bad category value', () => {
-      const rows = [['2025-01-01', 'Test', '-10', 'NOPE', 'false']];
-      const r = validateImport(rows, hdr);
-      assert(r.errors[0].includes('NOPE'));
-    });
-  });
-
-  // ── parseTransaction ──────────────────────────────────────────────────────
-  suite('parseTransaction', () => {
-    const hdr = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
-
-    test('maps fields correctly', () => {
-      const t = parseTransaction(['2025-03-15', 'Starbucks', '-4.75', 'Coffee / Bakery', 'false'], hdr, 'Chase *7515');
-      assertEqual(t.date, '2025-03-15');
-      assertEqual(t.description, 'Starbucks');
-      assertEqual(t.amount, -4.75);
-      assertEqual(t.category, 'Coffee / Bakery');
-      assertEqual(t.fix, false);
-      assertEqual(t.accountKey, 'Chase *7515');
-      assert(t.id, 'has id');
-    });
-
-    test('fix defaults to false when empty', () => {
-      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.fix, false);
-    });
-
-    test('fix is true for "true" string', () => {
-      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', 'true'], hdr, 'Chase *7515');
-      assertEqual(t.fix, true);
-    });
-
-    test('strips dollar signs from amount', () => {
-      const t = parseTransaction(['2025-01-01', 'Test', '$1,234.56', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.amount, 1234.56);
-    });
-
-    test('empty category stored as empty string', () => {
-      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.category, '');
-    });
-
-    test('normalizes slash-delimited date to ISO format', () => {
-      const t = parseTransaction(['2026/1/1', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-01-01');
-    });
-
-    test('zero-pads single-digit month and day in slash date', () => {
-      const t = parseTransaction(['2026/3/5', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-03-05');
-    });
-
-    test('normalizes MM/DD/YYYY date to ISO format', () => {
-      const t = parseTransaction(['04/05/2026', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-04-05');
-    });
-
-    test('normalizes M/D/YYYY date to ISO format', () => {
-      const t = parseTransaction(['4/5/2026', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-04-05');
-    });
-
-    test('normalizes MM-DD-YYYY date to ISO format', () => {
-      const t = parseTransaction(['04-05-2026', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-04-05');
-    });
-
-    test('normalizes YYYY/MM/DD date to ISO format', () => {
-      const t = parseTransaction(['2026/04/05', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-04-05');
-    });
-
-    test('normalizes YYYY/M/D date to ISO format', () => {
-      const t = parseTransaction(['2026/4/5', 'Test', '-1', '', ''], hdr, 'Chase *7515');
-      assertEqual(t.date, '2026-04-05');
-    });
-  });
-
-  // ── deduplicateTransactions ───────────────────────────────────────────────
-  suite('deduplicateTransactions', () => {
-    const base = [{ accountKey: 'Chase *7515', date: '2025-01-01', description: 'Foo', amount: -10, id: '1', category: '', fix: false }];
-
-    test('adds new unique transaction', () => {
-      const result = deduplicateTransactions(base, [{ accountKey: 'Chase *7515', date: '2025-01-02', description: 'Bar', amount: -5, id: '2', category: '', fix: false }]);
-      assertEqual(result.length, 2);
-    });
-
-    test('does not add exact duplicate', () => {
-      const dup = [{ accountKey: 'Chase *7515', date: '2025-01-01', description: 'Foo', amount: -10, id: '99', category: '', fix: false }];
-      const result = deduplicateTransactions(base, dup);
-      assertEqual(result.length, 1);
-    });
-
-    test('preserves original order', () => {
-      const result = deduplicateTransactions(base, [{ accountKey: 'X *0000', date: '2025-01-03', description: 'Z', amount: -1, id: '3', category: '', fix: false }]);
-      assertEqual(result[0].id, '1');
-      assertEqual(result[1].accountKey, 'X *0000');
-    });
-  });
+  // ══════════════════════════════════════════════════════════════════════════
+  // §2.2 Budget
+  // ══════════════════════════════════════════════════════════════════════════
 
   // ── filterByMonth ─────────────────────────────────────────────────────────
   suite('filterByMonth', () => {
@@ -387,6 +180,39 @@ function runTests() {
     });
   });
 
+  // ── getMonthList ──────────────────────────────────────────────────────────
+  suite('getMonthList', () => {
+    const tx = (date) => ({ date, amount: 10, category: 'Groceries', description: 'x', id: date, accountKey: 'a', fix: false });
+
+    test('given transactions in multiple months, returns them sorted chronologically', () => {
+      const result = getMonthList([tx('2025-03-15'), tx('2025-01-10')]);
+      assertEqual(result, [{ year: 2025, month: 1 }, { year: 2025, month: 3 }]);
+    });
+
+    test('given multiple transactions in the same month, aggregates into a single month entry', () => {
+      const result = getMonthList([tx('2025-03-01'), tx('2025-03-28')]);
+      assertEqual(result, [{ year: 2025, month: 3 }]);
+    });
+
+    test('given a transaction with no date, skips it', () => {
+      const result = getMonthList([{ date: '', amount: 10, category: 'Groceries', description: 'x', id: '1', accountKey: 'a', fix: false }, tx('2025-05-10')]);
+      assertEqual(result, [{ year: 2025, month: 5 }]);
+    });
+
+    test('given transactions spanning two years, sorts across year boundary correctly', () => {
+      const result = getMonthList([tx('2025-01-10'), tx('2024-12-31')]);
+      assertEqual(result, [{ year: 2024, month: 12 }, { year: 2025, month: 1 }]);
+    });
+
+    test('given no transactions, returns empty array', () => {
+      assertEqual(getMonthList([]), []);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // §2.3 Categorize
+  // ══════════════════════════════════════════════════════════════════════════
+
   // ── cycleCategoryByKey ────────────────────────────────────────────────────
   suite('cycleCategoryByKey', () => {
     test("'g' key cycles Gas → Groceries → Gifts → General Merchandise → wraps", () => {
@@ -436,151 +262,45 @@ function runTests() {
     });
   });
 
-  // ── toCSV ─────────────────────────────────────────────────────────────────
-  suite('toCSV', () => {
-    test('outputs header row', () => {
-      const csv = toCSV([]);
-      assertEqual(csv, 'Date,Description,Amount,Category,Fix');
+  // ══════════════════════════════════════════════════════════════════════════
+  // §2.5 Settings
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── isValidLast4 ─────────────────────────────────────────────────────────
+  suite('isValidLast4', () => {
+    test('given exactly 4 digits, returns true', () => {
+      assertEqual(isValidLast4('1234'), true);
     });
 
-    test('serializes boolean fix as true/false', () => {
-      const csv = toCSV([{ date: '2025-01-01', description: 'Test', amount: -10, category: 'Groceries', fix: true }]);
-      assert(csv.includes('true'), 'fix=true');
-      const csv2 = toCSV([{ date: '2025-01-01', description: 'Test', amount: -10, category: 'Groceries', fix: false }]);
-      assert(csv2.includes('false'), 'fix=false');
+    test('given fewer than 4 digits, returns false', () => {
+      assertEqual(isValidLast4('123'), false);
     });
 
-    test('quotes fields with commas', () => {
-      const csv = toCSV([{ date: '2025-01-01', description: 'Foo, Bar', amount: -10, category: 'Groceries', fix: false }]);
-      assert(csv.includes('"Foo, Bar"'), 'quoted description');
+    test('given more than 4 digits, returns false', () => {
+      assertEqual(isValidLast4('12345'), false);
     });
 
-    test('full round-trip: all 5 columns present', () => {
-      const row = { date: '2025-03-15', description: 'Starbucks', amount: -4.75, category: 'Coffee / Bakery', fix: false };
-      const csv = toCSV([row]);
-      const lines = csv.split('\n');
-      assertEqual(lines.length, 2);
-      assert(lines[1].includes('2025-03-15'));
-      assert(lines[1].includes('Starbucks'));
-      assert(lines[1].includes('-4.75'));
-      assert(lines[1].includes('Coffee / Bakery'));
+    test('given non-digit characters, returns false', () => {
+      assertEqual(isValidLast4('12ab'), false);
+    });
+
+    test('given a number (not a string), returns false', () => {
+      assertEqual(isValidLast4(1234), false);
     });
   });
 
-  // ── getMonthList ──────────────────────────────────────────────────────────
-  suite('getMonthList', () => {
-    const tx = (date) => ({ date, amount: 10, category: 'Groceries', description: 'x', id: date, accountKey: 'a', fix: false });
-
-    test('given transactions in multiple months, returns them sorted chronologically', () => {
-      const result = getMonthList([tx('2025-03-15'), tx('2025-01-10')]);
-      assertEqual(result, [{ year: 2025, month: 1 }, { year: 2025, month: 3 }]);
+  // ── formatAccountKey ──────────────────────────────────────────────────────
+  suite('formatAccountKey', () => {
+    test('basic format', () => {
+      assertEqual(formatAccountKey('Chase', '7515'), 'Chase *7515');
     });
 
-    test('given multiple transactions in the same month, aggregates into a single month entry', () => {
-      const result = getMonthList([tx('2025-03-01'), tx('2025-03-28')]);
-      assertEqual(result, [{ year: 2025, month: 3 }]);
+    test('account with parentheses', () => {
+      assertEqual(formatAccountKey('Citi (tony)', '1003'), 'Citi (tony) *1003');
     });
 
-    test('given a transaction with no date, skips it', () => {
-      const result = getMonthList([{ date: '', amount: 10, category: 'Groceries', description: 'x', id: '1', accountKey: 'a', fix: false }, tx('2025-05-10')]);
-      assertEqual(result, [{ year: 2025, month: 5 }]);
-    });
-
-    test('given transactions spanning two years, sorts across year boundary correctly', () => {
-      const result = getMonthList([tx('2025-01-10'), tx('2024-12-31')]);
-      assertEqual(result, [{ year: 2024, month: 12 }, { year: 2025, month: 1 }]);
-    });
-
-    test('given no transactions, returns empty array', () => {
-      assertEqual(getMonthList([]), []);
-    });
-  });
-
-  // ── sortByDateDesc ────────────────────────────────────────────────────────
-  suite('sortByDateDesc', () => {
-    test('returns transactions sorted newest-first', () => {
-      const txs = [
-        { date: '2025-01-01', amount: -10 },
-        { date: '2025-03-15', amount: -20 },
-        { date: '2025-02-10', amount: -30 },
-      ];
-      const result = sortByDateDesc(txs);
-      assertEqual(result[0].date, '2025-03-15');
-      assertEqual(result[1].date, '2025-02-10');
-      assertEqual(result[2].date, '2025-01-01');
-    });
-
-    test('does not mutate the original array', () => {
-      const txs = [
-        { date: '2025-01-01', amount: -10 },
-        { date: '2025-03-15', amount: -20 },
-      ];
-      sortByDateDesc(txs);
-      assertEqual(txs[0].date, '2025-01-01');
-    });
-
-    test('given a single transaction, returns it unchanged', () => {
-      const txs = [{ date: '2025-06-01', amount: -5 }];
-      const result = sortByDateDesc(txs);
-      assertEqual(result.length, 1);
-      assertEqual(result[0].date, '2025-06-01');
-    });
-
-    test('given an empty array, returns an empty array', () => {
-      assertEqual(sortByDateDesc([]).length, 0);
-    });
-  });
-
-  // ── filterBySearch ────────────────────────────────────────────────────────
-  suite('filterBySearch', () => {
-    const txs = [
-      { description: 'Starbucks Coffee', category: 'Coffee / Bakery', amount: -5.50, id: '1', accountKey: 'A', date: '2026-01-01', fix: false },
-      { description: 'Whole Foods', category: 'Groceries', amount: -87.32, id: '2', accountKey: 'A', date: '2026-01-02', fix: false },
-      { description: 'Shell Gas', category: 'Gas / EV Charging', amount: -45.00, id: '3', accountKey: 'A', date: '2026-01-03', fix: false },
-      { description: 'Disputed Charge', category: 'Misc', amount: -12.00, id: '4', accountKey: 'A', date: '2026-01-04', fix: true },
-    ];
-
-    test('given empty query, returns all transactions', () => {
-      assertEqual(filterBySearch(txs, '').length, 4);
-      assertEqual(filterBySearch(txs, '   ').length, 4);
-    });
-
-    test('given description match, returns matching transactions', () => {
-      const r = filterBySearch(txs, 'starbucks');
-      assertEqual(r.length, 1);
-      assertEqual(r[0].description, 'Starbucks Coffee');
-    });
-
-    test('given category match, returns matching transactions', () => {
-      const r = filterBySearch(txs, 'groceries');
-      assertEqual(r.length, 1);
-      assertEqual(r[0].category, 'Groceries');
-    });
-
-    test('given amount match, returns matching transactions', () => {
-      const r = filterBySearch(txs, '87.32');
-      assertEqual(r.length, 1);
-      assertEqual(r[0].amount, -87.32);
-    });
-
-    test('given no match, returns empty array', () => {
-      assertEqual(filterBySearch(txs, 'zzznomatch').length, 0);
-    });
-
-    test('match is case-insensitive', () => {
-      assertEqual(filterBySearch(txs, 'SHELL').length, 1);
-    });
-
-    test('given "fix" query, returns only transactions with fix === true', () => {
-      const r = filterBySearch(txs, 'fix');
-      assertEqual(r.length, 1);
-      assertEqual(r[0].id, '4');
-    });
-
-    test('given partial "fi" query, returns fix===true transaction (fi is prefix of fix)', () => {
-      const r = filterBySearch(txs, 'fi');
-      assertEqual(r.length, 1);
-      assertEqual(r[0].id, '4');
+    test('trims whitespace', () => {
+      assertEqual(formatAccountKey('  BofA  ', '  1884  '), 'BofA *1884');
     });
   });
 
@@ -656,59 +376,75 @@ function runTests() {
     });
   });
 
-  // ── isValidLast4 ─────────────────────────────────────────────────────────
-  suite('isValidLast4', () => {
-    test('given exactly 4 digits, returns true', () => {
-      assertEqual(isValidLast4('1234'), true);
+  // ══════════════════════════════════════════════════════════════════════════
+  // Shared — Import Pipeline  (§2.1 Load · §2.3 Categorize · §2.5 Settings)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── parseCSV ──────────────────────────────────────────────────────────────
+  suite('parseCSV', () => {
+    test('returns empty array for blank input', () => {
+      assertEqual(parseCSV(''), []);
+      assertEqual(parseCSV('   '), []);
+      assertEqual(parseCSV(null), []);
     });
 
-    test('given fewer than 4 digits, returns false', () => {
-      assertEqual(isValidLast4('123'), false);
+    test('parses simple CSV', () => {
+      const rows = parseCSV('a,b,c\n1,2,3');
+      assertEqual(rows.length, 2);
+      assertEqual(rows[0], ['a', 'b', 'c']);
+      assertEqual(rows[1], ['1', '2', '3']);
     });
 
-    test('given more than 4 digits, returns false', () => {
-      assertEqual(isValidLast4('12345'), false);
+    test('handles quoted fields with embedded commas', () => {
+      const rows = parseCSV('"hello, world",foo,bar');
+      assertEqual(rows[0][0], 'hello, world');
+      assertEqual(rows[0][1], 'foo');
     });
 
-    test('given non-digit characters, returns false', () => {
-      assertEqual(isValidLast4('12ab'), false);
+    test('handles Windows CRLF line endings', () => {
+      const rows = parseCSV('a,b\r\n1,2\r\n3,4');
+      assertEqual(rows.length, 3);
     });
 
-    test('given a number (not a string), returns false', () => {
-      assertEqual(isValidLast4(1234), false);
-    });
-  });
-
-  // ── sortByDateAsc ─────────────────────────────────────────────────────────
-  suite('sortByDateAsc', () => {
-    test('returns transactions sorted oldest-first', () => {
-      const txs = [
-        { date: '2025-03-15', amount: -20 },
-        { date: '2025-01-01', amount: -10 },
-        { date: '2025-02-10', amount: -30 },
-      ];
-      const result = sortByDateAsc(txs);
-      assertEqual(result[0].date, '2025-01-01');
-      assertEqual(result[1].date, '2025-02-10');
-      assertEqual(result[2].date, '2025-03-15');
+    test('strips BOM', () => {
+      const rows = parseCSV('\uFEFFDate,Desc\n2025-01-01,Foo');
+      assertEqual(rows[0][0], 'Date');
     });
 
-    test('does not mutate the original array', () => {
-      const txs = [
-        { date: '2025-03-15', amount: -20 },
-        { date: '2025-01-01', amount: -10 },
-      ];
-      sortByDateAsc(txs);
-      assertEqual(txs[0].date, '2025-03-15');
+    test('handles escaped quotes inside quoted fields', () => {
+      const rows = parseCSV('"say ""hello""",world');
+      assertEqual(rows[0][0], 'say "hello"');
     });
 
-    test('given an empty array, returns an empty array', () => {
-      assertEqual(sortByDateAsc([]).length, 0);
+    test('skips blank lines', () => {
+      const rows = parseCSV('a,b\n\n1,2\n\n');
+      assertEqual(rows.length, 2);
     });
   });
 
-  // ── buildHeaderMap — debit_amount / credit_amount ────────────────────────
-  suite('buildHeaderMap — debit_amount / credit_amount', () => {
+  // ── buildHeaderMap ────────────────────────────────────────────────────────
+  suite('buildHeaderMap', () => {
+    test('maps standard headers case-insensitively', () => {
+      const m = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
+      assertEqual(m.date, 0);
+      assertEqual(m.description, 1);
+      assertEqual(m.amount, 2);
+      assertEqual(m.category, 3);
+      assertEqual(m.fix, 4);
+    });
+
+    test('returns error if required column missing', () => {
+      const m = buildHeaderMap(['Date', 'Amount']); // missing Description
+      assert(m.error, 'should return error');
+      assert(m.error.includes('Description'), 'error mentions missing column');
+    });
+
+    test('category and fix default to -1 when absent', () => {
+      const m = buildHeaderMap(['Date', 'Description', 'Amount']);
+      assertEqual(m.category, -1);
+      assertEqual(m.fix, -1);
+    });
+
     test('maps debit_amount and credit_amount to separate indices', () => {
       const m = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
       assertEqual(m.debitAmount, 2);
@@ -760,55 +496,338 @@ function runTests() {
     });
   });
 
-  // ── validateImport — debit_amount / credit_amount ────────────────────────
-  suite('validateImport — debit_amount / credit_amount', () => {
-    const hdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+  // ── validateImport ────────────────────────────────────────────────────────
+  suite('validateImport', () => {
+    const hdr = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
+
+    test('passes when all categories are valid', () => {
+      const rows = [['2025-01-01', 'Test', '-10', 'Groceries', 'false']];
+      const r = validateImport(rows, hdr);
+      assert(r.valid);
+      assertEqual(r.errors.length, 0);
+    });
+
+    test('passes when category is empty', () => {
+      const rows = [['2025-01-01', 'Test', '-10', '', 'false']];
+      const r = validateImport(rows, hdr);
+      assert(r.valid);
+    });
+
+    test('fails with row number when category is invalid', () => {
+      const rows = [
+        ['2025-01-01', 'Test', '-10', 'InvalidCat', 'false'],
+        ['2025-01-02', 'Test2', '-5', 'Groceries', 'false'],
+        ['2025-01-03', 'Test3', '-8', 'BadCategory', 'false'],
+      ];
+      const r = validateImport(rows, hdr);
+      assert(!r.valid);
+      assertEqual(r.errors.length, 2);
+      assert(r.errors[0].includes('Row 2'), 'mentions row 2');
+      assert(r.errors[1].includes('Row 4'), 'mentions row 4');
+    });
+
+    test('error message includes the bad category value', () => {
+      const rows = [['2025-01-01', 'Test', '-10', 'NOPE', 'false']];
+      const r = validateImport(rows, hdr);
+      assert(r.errors[0].includes('NOPE'));
+    });
 
     test('given debit column filled and credit blank, passes', () => {
-      const r = validateImport([['2025-01-01', 'Coffee', '4.50', '']], hdr);
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const r = validateImport([['2025-01-01', 'Coffee', '4.50', '']], splitHdr);
       assert(r.valid);
     });
 
     test('given credit column filled and debit blank, passes', () => {
-      const r = validateImport([['2025-01-01', 'Refund', '', '10.00']], hdr);
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const r = validateImport([['2025-01-01', 'Refund', '', '10.00']], splitHdr);
       assert(r.valid);
     });
 
-    test('given both columns blank, fails with row number', () => {
-      const r = validateImport([['2025-01-01', 'Coffee', '', '']], hdr);
+    test('given both debit and credit columns blank, fails with row number', () => {
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const r = validateImport([['2025-01-01', 'Coffee', '', '']], splitHdr);
       assert(!r.valid);
       assert(r.errors[0].includes('Row 2'));
     });
 
-    test('given both columns filled, fails with row number', () => {
-      const r = validateImport([['2025-01-01', 'Coffee', '4.50', '4.50']], hdr);
+    test('given both debit and credit columns filled, fails with row number', () => {
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const r = validateImport([['2025-01-01', 'Coffee', '4.50', '4.50']], splitHdr);
       assert(!r.valid);
       assert(r.errors[0].includes('Row 2'));
     });
   });
 
-  // ── parseTransaction — debit_amount / credit_amount ──────────────────────
-  suite('parseTransaction — debit_amount / credit_amount', () => {
-    const hdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+  // ── parseTransaction ──────────────────────────────────────────────────────
+  suite('parseTransaction', () => {
+    const hdr = buildHeaderMap(['Date', 'Description', 'Amount', 'Category', 'Fix']);
+
+    test('maps fields correctly', () => {
+      const t = parseTransaction(['2025-03-15', 'Starbucks', '-4.75', 'Coffee / Bakery', 'false'], hdr, 'Chase *7515');
+      assertEqual(t.date, '2025-03-15');
+      assertEqual(t.description, 'Starbucks');
+      assertEqual(t.amount, -4.75);
+      assertEqual(t.category, 'Coffee / Bakery');
+      assertEqual(t.fix, false);
+      assertEqual(t.accountKey, 'Chase *7515');
+      assert(t.id, 'has id');
+    });
+
+    test('fix defaults to false when empty', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.fix, false);
+    });
+
+    test('fix is true for "true" string', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', 'true'], hdr, 'Chase *7515');
+      assertEqual(t.fix, true);
+    });
+
+    test('strips dollar signs from amount', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '$1,234.56', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.amount, 1234.56);
+    });
+
+    test('empty category stored as empty string', () => {
+      const t = parseTransaction(['2025-01-01', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.category, '');
+    });
+
+    test('normalizes slash-delimited date to ISO format', () => {
+      const t = parseTransaction(['2026/1/1', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-01-01');
+    });
+
+    test('zero-pads single-digit month and day in slash date', () => {
+      const t = parseTransaction(['2026/3/5', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-03-05');
+    });
+
+    test('normalizes MM/DD/YYYY date to ISO format', () => {
+      const t = parseTransaction(['04/05/2026', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-04-05');
+    });
+
+    test('normalizes M/D/YYYY date to ISO format', () => {
+      const t = parseTransaction(['4/5/2026', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-04-05');
+    });
+
+    test('normalizes MM-DD-YYYY date to ISO format', () => {
+      const t = parseTransaction(['04-05-2026', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-04-05');
+    });
+
+    test('normalizes YYYY/MM/DD date to ISO format', () => {
+      const t = parseTransaction(['2026/04/05', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-04-05');
+    });
+
+    test('normalizes YYYY/M/D date to ISO format', () => {
+      const t = parseTransaction(['2026/4/5', 'Test', '-1', '', ''], hdr, 'Chase *7515');
+      assertEqual(t.date, '2026-04-05');
+    });
 
     test('debit column value becomes negative', () => {
-      const t = parseTransaction(['2025-01-01', 'Coffee', '4.50', ''], hdr, 'Chase *1234');
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const t = parseTransaction(['2025-01-01', 'Coffee', '4.50', ''], splitHdr, 'Chase *1234');
       assertEqual(t.amount, -4.5);
     });
 
     test('debit column with already-negative value still becomes negative', () => {
-      const t = parseTransaction(['2025-01-01', 'Coffee', '-4.50', ''], hdr, 'Chase *1234');
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const t = parseTransaction(['2025-01-01', 'Coffee', '-4.50', ''], splitHdr, 'Chase *1234');
       assertEqual(t.amount, -4.5);
     });
 
     test('credit column value becomes positive', () => {
-      const t = parseTransaction(['2025-01-01', 'Refund', '', '10.00'], hdr, 'Chase *1234');
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const t = parseTransaction(['2025-01-01', 'Refund', '', '10.00'], splitHdr, 'Chase *1234');
       assertEqual(t.amount, 10);
     });
 
     test('credit column with negative value still becomes positive', () => {
-      const t = parseTransaction(['2025-01-01', 'Refund', '', '-10.00'], hdr, 'Chase *1234');
+      const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      const t = parseTransaction(['2025-01-01', 'Refund', '', '-10.00'], splitHdr, 'Chase *1234');
       assertEqual(t.amount, 10);
+    });
+  });
+
+  // ── deduplicateTransactions ───────────────────────────────────────────────
+  suite('deduplicateTransactions', () => {
+    const base = [{ accountKey: 'Chase *7515', date: '2025-01-01', description: 'Foo', amount: -10, id: '1', category: '', fix: false }];
+
+    test('adds new unique transaction', () => {
+      const result = deduplicateTransactions(base, [{ accountKey: 'Chase *7515', date: '2025-01-02', description: 'Bar', amount: -5, id: '2', category: '', fix: false }]);
+      assertEqual(result.length, 2);
+    });
+
+    test('does not add exact duplicate', () => {
+      const dup = [{ accountKey: 'Chase *7515', date: '2025-01-01', description: 'Foo', amount: -10, id: '99', category: '', fix: false }];
+      const result = deduplicateTransactions(base, dup);
+      assertEqual(result.length, 1);
+    });
+
+    test('preserves original order', () => {
+      const result = deduplicateTransactions(base, [{ accountKey: 'X *0000', date: '2025-01-03', description: 'Z', amount: -1, id: '3', category: '', fix: false }]);
+      assertEqual(result[0].id, '1');
+      assertEqual(result[1].accountKey, 'X *0000');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Shared — Search & Sort  (§2.2 Budget · §2.3 Categorize)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── sortByDateDesc ────────────────────────────────────────────────────────
+  suite('sortByDateDesc', () => {
+    test('returns transactions sorted newest-first', () => {
+      const txs = [
+        { date: '2025-01-01', amount: -10 },
+        { date: '2025-03-15', amount: -20 },
+        { date: '2025-02-10', amount: -30 },
+      ];
+      const result = sortByDateDesc(txs);
+      assertEqual(result[0].date, '2025-03-15');
+      assertEqual(result[1].date, '2025-02-10');
+      assertEqual(result[2].date, '2025-01-01');
+    });
+
+    test('does not mutate the original array', () => {
+      const txs = [
+        { date: '2025-01-01', amount: -10 },
+        { date: '2025-03-15', amount: -20 },
+      ];
+      sortByDateDesc(txs);
+      assertEqual(txs[0].date, '2025-01-01');
+    });
+
+    test('given a single transaction, returns it unchanged', () => {
+      const txs = [{ date: '2025-06-01', amount: -5 }];
+      const result = sortByDateDesc(txs);
+      assertEqual(result.length, 1);
+      assertEqual(result[0].date, '2025-06-01');
+    });
+
+    test('given an empty array, returns an empty array', () => {
+      assertEqual(sortByDateDesc([]).length, 0);
+    });
+  });
+
+  // ── sortByDateAsc ─────────────────────────────────────────────────────────
+  suite('sortByDateAsc', () => {
+    test('returns transactions sorted oldest-first', () => {
+      const txs = [
+        { date: '2025-03-15', amount: -20 },
+        { date: '2025-01-01', amount: -10 },
+        { date: '2025-02-10', amount: -30 },
+      ];
+      const result = sortByDateAsc(txs);
+      assertEqual(result[0].date, '2025-01-01');
+      assertEqual(result[1].date, '2025-02-10');
+      assertEqual(result[2].date, '2025-03-15');
+    });
+
+    test('does not mutate the original array', () => {
+      const txs = [
+        { date: '2025-03-15', amount: -20 },
+        { date: '2025-01-01', amount: -10 },
+      ];
+      sortByDateAsc(txs);
+      assertEqual(txs[0].date, '2025-03-15');
+    });
+
+    test('given an empty array, returns an empty array', () => {
+      assertEqual(sortByDateAsc([]).length, 0);
+    });
+  });
+
+  // ── filterBySearch ────────────────────────────────────────────────────────
+  suite('filterBySearch', () => {
+    const txs = [
+      { description: 'Starbucks Coffee', category: 'Coffee / Bakery', amount: -5.50, id: '1', accountKey: 'A', date: '2026-01-01', fix: false },
+      { description: 'Whole Foods', category: 'Groceries', amount: -87.32, id: '2', accountKey: 'A', date: '2026-01-02', fix: false },
+      { description: 'Shell Gas', category: 'Gas / EV Charging', amount: -45.00, id: '3', accountKey: 'A', date: '2026-01-03', fix: false },
+      { description: 'Disputed Charge', category: 'Misc', amount: -12.00, id: '4', accountKey: 'A', date: '2026-01-04', fix: true },
+    ];
+
+    test('given empty query, returns all transactions', () => {
+      assertEqual(filterBySearch(txs, '').length, 4);
+      assertEqual(filterBySearch(txs, '   ').length, 4);
+    });
+
+    test('given description match, returns matching transactions', () => {
+      const r = filterBySearch(txs, 'starbucks');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].description, 'Starbucks Coffee');
+    });
+
+    test('given category match, returns matching transactions', () => {
+      const r = filterBySearch(txs, 'groceries');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].category, 'Groceries');
+    });
+
+    test('given amount match, returns matching transactions', () => {
+      const r = filterBySearch(txs, '87.32');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].amount, -87.32);
+    });
+
+    test('given no match, returns empty array', () => {
+      assertEqual(filterBySearch(txs, 'zzznomatch').length, 0);
+    });
+
+    test('match is case-insensitive', () => {
+      assertEqual(filterBySearch(txs, 'SHELL').length, 1);
+    });
+
+    test('given "fix" query, returns only transactions with fix === true', () => {
+      const r = filterBySearch(txs, 'fix');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].id, '4');
+    });
+
+    test('given partial "fi" query, returns fix===true transaction (fi is prefix of fix)', () => {
+      const r = filterBySearch(txs, 'fi');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].id, '4');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Shared — Export  (§2.1 Load · §2.3 Categorize)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── toCSV ─────────────────────────────────────────────────────────────────
+  suite('toCSV', () => {
+    test('outputs header row', () => {
+      const csv = toCSV([]);
+      assertEqual(csv, 'Date,Description,Amount,Category,Fix');
+    });
+
+    test('serializes boolean fix as true/false', () => {
+      const csv = toCSV([{ date: '2025-01-01', description: 'Test', amount: -10, category: 'Groceries', fix: true }]);
+      assert(csv.includes('true'), 'fix=true');
+      const csv2 = toCSV([{ date: '2025-01-01', description: 'Test', amount: -10, category: 'Groceries', fix: false }]);
+      assert(csv2.includes('false'), 'fix=false');
+    });
+
+    test('quotes fields with commas', () => {
+      const csv = toCSV([{ date: '2025-01-01', description: 'Foo, Bar', amount: -10, category: 'Groceries', fix: false }]);
+      assert(csv.includes('"Foo, Bar"'), 'quoted description');
+    });
+
+    test('full round-trip: all 5 columns present', () => {
+      const row = { date: '2025-03-15', description: 'Starbucks', amount: -4.75, category: 'Coffee / Bakery', fix: false };
+      const csv = toCSV([row]);
+      const lines = csv.split('\n');
+      assertEqual(lines.length, 2);
+      assert(lines[1].includes('2025-03-15'));
+      assert(lines[1].includes('Starbucks'));
+      assert(lines[1].includes('-4.75'));
+      assert(lines[1].includes('Coffee / Bakery'));
     });
   });
 
