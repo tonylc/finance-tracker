@@ -64,7 +64,7 @@ Once the user approves, proceed in this strict order:
 1. **Update `docs/design.md`** with the approved changes from the "Design Doc Changes" section.
 
 2. **Write both sets of failing tests.**
-   - Add the approved `suite()`/`test()` blocks to `tests.html`, inserted before the `  renderResults()` call and after the last existing suite. Use the existing comment separator style (`// ── SuiteName ──...`).
+   - Add the approved `suite()`/`test()` blocks to `tests.html` in the matching section (see **Testing Pyramid** below for structure). Use the existing comment separator style (`// ── SuiteName ──...`).
    - Add the approved `test.describe()`/`test()` blocks to the appropriate `e2e/*.spec.js` file.
    - Run `/tests` — both the new unit tests and the new E2E tests must fail at this point.
 
@@ -80,6 +80,37 @@ Apply this workflow for:
 - Any new function or symbol added to `__financeLib`
 - Any behavioral change to an existing library function
 - Any UI feature that depends on new or changed library logic
+
+## Testing Pyramid
+
+**Unit tests** (`tests.html`) exhaustively cover all behaviors, edge cases, and error conditions for every library function in `__financeLib`. If a behavior can be exercised through a pure function, it belongs here.
+
+**E2E tests** (`e2e/*.spec.js`) verify UI wiring — not behavior. For each `#### Feature Name` in design.md, the E2E suite needs:
+- **One success path** showing the feature works end-to-end through the browser
+- **One error path** per distinct error *presentation* (different UI feedback = distinct)
+
+Do **not** repeat in E2E what unit tests already prove. If `buildHeaderMap` unit tests cover 8 validation cases, the E2E only needs one case to confirm errors surface in the form.
+
+**Push coverage down whenever possible.** If a behavior can be tested via a library function in `tests.html`, test it there. Only escalate to E2E when the behavior is UI-specific (DOM state, focus, rendering) or cannot be reached through a library function.
+
+### `tests.html` structure
+
+Organized to mirror design.md. View-specific suites go under their view heading; suites shared across views cluster under a "Shared" heading:
+
+```
+§2.2 Budget           — filterByMonth, aggregateByCategory, totalSpend, getMonthList
+§2.3 Categorize       — cycleCategoryByKey, validateExport
+§2.5 Settings         — isValidLast4, formatAccountKey, exportAccountsJSON, importAccountsJSON
+Shared — Import Pipeline  (§2.1 Load · §2.3 Categorize · §2.5 Settings)
+                      — parseCSV, buildHeaderMap, validateImport, parseTransaction,
+                        deduplicateTransactions
+Shared — Search & Sort    (§2.2 Budget · §2.3 Categorize)
+                      — sortByDateDesc, sortByDateAsc, filterBySearch
+Shared — Export           (§2.1 Load · §2.3 Categorize)
+                      — toCSV
+```
+
+When adding tests for a new feature, insert the suite in the matching section.
 
 ## Commit Discipline
 
