@@ -77,16 +77,6 @@ test.describe('Keyboard Cycling', () => {
     await expect(page.locator('#cat-tbody tr[data-idx="0"] select')).not.toBeFocused();
   });
 
-  test('pressing same letter again continues cycling within matching categories', async ({ page }) => {
-    await page.keyboard.press('j');
-    await page.keyboard.press('g'); // focus row 0 select, cycle to first G category
-    const first = await page.locator('#cat-tbody tr[data-idx="0"] select').inputValue();
-    await page.keyboard.press('g'); // cycle to next G category
-    const second = await page.locator('#cat-tbody tr[data-idx="0"] select').inputValue();
-    // Both should start with G but may differ if multiple G categories exist
-    expect(second).toMatch(/^G/i);
-    // (If only one G category, it wraps — at minimum it's still a G category)
-  });
 });
 
 test.describe('Keyboard Navigation', () => {

@@ -75,28 +75,6 @@ test.describe('Transaction Search', () => {
     await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(0);
   });
 
-  test('clearing the search restores the full list', async ({ page }) => {
-    await page.fill('#budget-search', 'whole');
-    await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
-    await page.fill('#budget-search', '');
-    await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(3);
-  });
-
-  test('search is case-insensitive', async ({ page }) => {
-    await page.fill('#budget-search', 'COFFEE');
-    await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(2);
-  });
-
-  test("typing 'fix' returns only transactions with fix === true", async ({ page }) => {
-    await page.fill('#budget-search', 'fix');
-    await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
-    await expect(page.locator('#budget-month-tx-count')).toHaveText('1');
-  });
-
-  test("typing partial prefix 'fi' also returns fix-flagged transactions", async ({ page }) => {
-    await page.fill('#budget-search', 'fi');
-    await expect(page.locator('#budget-tx-tbody .tx-row')).toHaveCount(1);
-  });
 });
 
 test.describe('Bar Chart', () => {

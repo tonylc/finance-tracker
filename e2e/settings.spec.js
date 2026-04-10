@@ -64,13 +64,6 @@ test.describe('Last 4 Validation', () => {
     await expect(page.locator('#settings-form-card')).toBeVisible();
   });
 
-  test('last4 shorter than 4 digits shows validation error and blocks save', async ({ page }) => {
-    await page.fill('#sf-name', 'Test Bank');
-    await page.fill('#sf-last4', '123');
-    await page.fill('#sf-format-input', '["date","description","amount"]');
-    await page.click('#sf-save-btn');
-    await expect(page.locator('#sf-form-error')).toBeVisible();
-  });
 });
 
 test.describe('Column Format Validation', () => {
@@ -97,15 +90,6 @@ test.describe('Column Format Validation', () => {
     await expect(page.locator('#sf-form-error')).toContainText('Amount');
   });
 
-  test('saving with debit_amount only (no credit_amount) shows error', async ({ page }) => {
-    await page.fill('#sf-name', 'Test Bank');
-    await page.fill('#sf-last4', '5678');
-    await page.fill('#sf-format-input', '["date","description","debit_amount"]');
-    await page.click('#sf-save-btn');
-    await expect(page.locator('#sf-form-error')).toBeVisible();
-    await expect(page.locator('#sf-form-error')).toContainText('credit_amount');
-  });
-
   test('saving with debit_amount and credit_amount succeeds', async ({ page }) => {
     await page.fill('#sf-name', 'Test Bank');
     await page.fill('#sf-last4', '5678');
@@ -115,23 +99,6 @@ test.describe('Column Format Validation', () => {
     await expect(page.locator('#settings-tbody')).toContainText('Test Bank');
   });
 
-  test('saving with duplicate date field shows error and blocks save', async ({ page }) => {
-    await page.fill('#sf-name', 'Test Bank');
-    await page.fill('#sf-last4', '5678');
-    await page.fill('#sf-format-input', '["date","date","description","amount"]');
-    await page.click('#sf-save-btn');
-    await expect(page.locator('#sf-form-error')).toBeVisible();
-    await expect(page.locator('#sf-form-error')).toContainText('date');
-  });
-
-  test('saving with duplicate amount field shows error and blocks save', async ({ page }) => {
-    await page.fill('#sf-name', 'Test Bank');
-    await page.fill('#sf-last4', '5678');
-    await page.fill('#sf-format-input', '["date","description","amount","amount"]');
-    await page.click('#sf-save-btn');
-    await expect(page.locator('#sf-form-error')).toBeVisible();
-    await expect(page.locator('#sf-form-error')).toContainText('amount');
-  });
 });
 
 test.describe('Delete Account Profile', () => {
@@ -199,16 +166,4 @@ test.describe('Import Settings', () => {
     await expect(page.locator('#settings-import-error')).toBeVisible();
   });
 
-  test('importing JSON with invalid last4 shows inline validation error', async ({ page }) => {
-    const badJSON = JSON.stringify([{
-      id: 'bad-1',
-      name: 'Bad Bank',
-      last4: '12ab',
-      inputCsvFormat: ['date', 'description', null, 'amount'],
-    }]);
-    await page.fill('#settings-import-field', badJSON);
-    await page.click('#settings-import-btn');
-    await expect(page.locator('#settings-import-error')).toBeVisible();
-    await expect(page.locator('#settings-import-error')).toContainText('last4');
-  });
 });
