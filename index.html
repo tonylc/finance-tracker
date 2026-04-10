@@ -601,17 +601,9 @@
         </div>
       </div>
       <div style="margin-bottom:12px;">
-        <label for="sf-header-row">Bank CSV Header Row</label>
-        <p style="font-size:12px;color:#777;margin-bottom:6px;">Paste the first line (column headers) from your bank&rsquo;s CSV export.</p>
-        <div style="display:flex;gap:8px;align-items:flex-start;">
-          <input type="text" id="sf-header-row" placeholder="e.g. Trans Date,Post Date,Description,Amount,Category">
-          <button class="btn btn-primary btn-sm" id="sf-parse-btn" style="white-space:nowrap;flex-shrink:0;">Parse Columns</button>
-        </div>
-      </div>
-      <div id="sf-columns-section" style="display:none;margin-bottom:14px;">
-        <label>Column Mappings</label>
-        <p style="font-size:12px;color:#777;margin-bottom:8px;">Assign each column to a field. <strong>Date, Description, Amount</strong> are required.</p>
-        <div id="sf-columns-grid"></div>
+        <label for="sf-format-input">Column Format</label>
+        <p style="font-size:12px;color:#777;margin-bottom:6px;">JSON array mapping each CSV column position to a field. Allowed values: <code>"date"</code>, <code>"description"</code>, <code>"amount"</code>, <code>"debit_amount"</code>, <code>"credit_amount"</code>, <code>null</code> (skip). Use <code>"debit_amount"</code> + <code>"credit_amount"</code> together for split-column bank exports.</p>
+        <input type="text" id="sf-format-input" placeholder='e.g. ["date","description","amount"]' style="font-family:monospace;font-size:12px;">
       </div>
       <div id="sf-form-error" style="display:none;"></div>
       <div class="mt-16" style="display:flex;gap:8px;">
@@ -739,16 +731,19 @@ function validateImport(rows, headerMap, requireCategory) {
       errors.push(`Row ${rowNum}: description is blank`);
 
     // amount — must be non-blank and parse as a finite number
-    const amtIndices = headerMap.amountIndices || [headerMap.amount];
-    const amtVals = amtIndices.map(i => (fields[i] || '').trim());
-    const filled = amtVals.filter(v => v !== '');
-    if (amtIndices.length > 1) {
-      if (filled.length === 0)
+    if (headerMap.debitAmount !== undefined) {
+      const debitVal = (fields[headerMap.debitAmount] || '').trim();
+      const creditVal = (fields[headerMap.creditAmount] || '').trim();
+      const filledCount = [debitVal, creditVal].filter(v => v !== '').length;
+      if (filledCount === 0)
         errors.push(`Row ${rowNum}: amount is blank`);
-      else if (filled.length > 1)
+      else if (filledCount > 1)
         errors.push(`Row ${rowNum}: amount is ambiguous (both debit and credit columns have values)`);
-      else if (!isFinite(parseFloat(filled[0].replace(/[$,]/g, ''))))
-        errors.push(`Row ${rowNum}: amount "${filled[0]}" is not a valid number`);
+      else {
+        const raw = debitVal || creditVal;
+        if (!isFinite(parseFloat(raw.replace(/[$,]/g, ''))))
+          errors.push(`Row ${rowNum}: amount "${raw}" is not a valid number`);
+      }
     } else {
       const amtRaw = (fields[headerMap.amount] || '').trim();
       if (!amtRaw)
@@ -771,15 +766,11 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
   const map = {};
   if (inputCsvFormat) {
     // Positional mapping: array index = CSV column index, value = field name or null
-    const amtIndices = [];
     inputCsvFormat.forEach((field, i) => {
-      if (field === 'amount') amtIndices.push(i);
+      if (field === 'debit_amount') map.debitAmount = i;
+      else if (field === 'credit_amount') map.creditAmount = i;
       else if (field) map[field] = i;
     });
-    if (amtIndices.length) {
-      map.amountIndices = amtIndices;
-      map.amount = amtIndices[0]; // keep for backwards compat
-    }
   } else {
     // Fallback: match by lowercase header name (preserves existing behaviour)
     headerRow.forEach((h, i) => {
@@ -791,10 +782,16 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
       else if (key === 'fix') map.fix = i;
     });
   }
-  // Normalize: ensure amountIndices is always set when amount is known
-  if (map.amount !== undefined && !map.amountIndices) map.amountIndices = [map.amount];
+  const hasSplit = map.debitAmount !== undefined || map.creditAmount !== undefined;
+  const hasSingle = map.amount !== undefined;
+  if (hasSplit && hasSingle)
+    return { error: 'Cannot mix "amount" with "debit_amount"/"credit_amount"' };
+  if (map.debitAmount !== undefined && map.creditAmount === undefined)
+    return { error: 'Missing required column: credit_amount (required when debit_amount is used)' };
+  if (map.creditAmount !== undefined && map.debitAmount === undefined)
+    return { error: 'Missing required column: debit_amount (required when credit_amount is used)' };
   const missing = ['date', 'description'].filter(k => map[k] === undefined)
-    .concat(!map.amountIndices ? ['amount'] : []);
+    .concat(!hasSingle && !hasSplit ? ['amount'] : []);
   if (missing.length) return { error: `Missing required columns: ${missing.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(', ')}` };
   if (map.category === undefined) map.category = -1; // optional
   if (map.fix === undefined) map.fix = -1;           // optional
@@ -819,8 +816,14 @@ function parseTransaction(fields, headerMap, accountKey) {
     })(),
     description: (fields[headerMap.description] || '').trim(),
     amount: (() => {
-      const indices = headerMap.amountIndices || [headerMap.amount];
-      const raw = indices.map(i => (fields[i] || '').trim()).find(v => v !== '') || '0';
+      if (headerMap.debitAmount !== undefined) {
+        const debit = (fields[headerMap.debitAmount] || '').trim();
+        const credit = (fields[headerMap.creditAmount] || '').trim();
+        if (debit) return -Math.abs(parseFloat(debit.replace(/[$,]/g, '')) || 0);
+        if (credit) return Math.abs(parseFloat(credit.replace(/[$,]/g, '')) || 0);
+        return 0;
+      }
+      const raw = (fields[headerMap.amount] || '').trim();
       return parseFloat(raw.replace(/[$,]/g, '')) || 0;
     })(),
     category: cat,
@@ -1614,7 +1617,7 @@ function handleCatExport() {
 let editingAccountId = null;
 
 document.getElementById('settings-add-btn').addEventListener('click', () => showAccountForm(null));
-document.getElementById('sf-parse-btn').addEventListener('click', parseHeaderRow);
+
 document.getElementById('sf-save-btn').addEventListener('click', saveAccountConfig);
 document.getElementById('sf-cancel-btn').addEventListener('click', hideAccountForm);
 document.getElementById('settings-export-btn').addEventListener('click', doExportSettings);
@@ -1684,9 +1687,7 @@ function showAccountForm(accountId) {
   document.getElementById('settings-form-title').textContent = accountId ? 'Edit Account' : 'Add Account';
   document.getElementById('sf-name').value = '';
   document.getElementById('sf-last4').value = '';
-  document.getElementById('sf-header-row').value = '';
-  document.getElementById('sf-columns-section').style.display = 'none';
-  document.getElementById('sf-columns-grid').innerHTML = '';
+  document.getElementById('sf-format-input').value = '';
   document.getElementById('sf-form-error').style.display = 'none';
 
   if (accountId) {
@@ -1694,7 +1695,7 @@ function showAccountForm(accountId) {
     if (account) {
       document.getElementById('sf-name').value = account.name;
       document.getElementById('sf-last4').value = account.last4;
-      renderColumnMappings(null, account.inputCsvFormat);
+      document.getElementById('sf-format-input').value = JSON.stringify(account.inputCsvFormat);
     }
   }
 
@@ -1708,61 +1709,7 @@ function hideAccountForm() {
   editingAccountId = null;
 }
 
-function parseHeaderRow() {
-  const headerRowInput = document.getElementById('sf-header-row').value.trim();
-  const errEl = document.getElementById('sf-form-error');
-  if (!headerRowInput) {
-    errEl.className = 'alert alert-error';
-    errEl.textContent = 'Please paste a header row first.';
-    errEl.style.display = 'block';
-    return;
-  }
-  errEl.style.display = 'none';
-  renderColumnMappings(parseCSVLine(headerRowInput), null);
-}
 
-function renderColumnMappings(columns, existingFormat) {
-  const grid = document.getElementById('sf-columns-grid');
-  grid.innerHTML = '';
-  const count = columns ? columns.length : existingFormat.length;
-  const fieldOptions = [
-    { value: '', label: '— skip —' },
-    { value: 'date', label: 'Date' },
-    { value: 'description', label: 'Description' },
-    { value: 'amount', label: 'Amount' },
-    { value: 'category', label: 'Category' },
-    { value: 'fix', label: 'Fix' },
-  ];
-
-  for (let i = 0; i < count; i++) {
-    const colName = columns ? columns[i] : `Column ${i}`;
-    const existingField = existingFormat ? (existingFormat[i] || '') : '';
-
-    const row = document.createElement('div');
-    row.className = 'col-mapping-row';
-
-    const label = document.createElement('span');
-    label.className = 'col-name';
-    label.title = colName;
-    label.textContent = `Col ${i}: ${colName}`;
-
-    const sel = document.createElement('select');
-    sel.dataset.colIndex = i;
-    fieldOptions.forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f.value;
-      opt.textContent = f.label;
-      if (f.value === existingField) opt.selected = true;
-      sel.appendChild(opt);
-    });
-
-    row.appendChild(label);
-    row.appendChild(sel);
-    grid.appendChild(row);
-  }
-
-  document.getElementById('sf-columns-section').style.display = 'block';
-}
 
 function saveAccountConfig() {
   const name = document.getElementById('sf-name').value.trim();
@@ -1781,30 +1728,26 @@ function saveAccountConfig() {
     errEl.style.display = 'block';
     return;
   }
-  if (document.getElementById('sf-columns-section').style.display === 'none') {
+  const formatRaw = document.getElementById('sf-format-input').value.trim();
+  let inputCsvFormat;
+  try {
+    inputCsvFormat = JSON.parse(formatRaw);
+  } catch {
     errEl.className = 'alert alert-error';
-    errEl.textContent = 'Please parse your bank\'s CSV header row and assign column mappings.';
+    errEl.textContent = 'Column format must be valid JSON (e.g. ["date","description","amount"]).';
     errEl.style.display = 'block';
     return;
   }
-
-  const selects = document.getElementById('sf-columns-grid').querySelectorAll('select');
-  const inputCsvFormat = [];
-  selects.forEach(sel => {
-    inputCsvFormat[parseInt(sel.dataset.colIndex)] = sel.value || null;
-  });
-
-  const required = ['date', 'description', 'amount'];
-  const counts = Object.fromEntries(required.map(f => [f, inputCsvFormat.filter(x => x === f).length]));
-  const missing = required.filter(f => counts[f] === 0);
-  const tooMany = ['date', 'description'].filter(f => counts[f] > 1)
-    .concat(counts.amount > 2 ? ['amount'] : []);
-  if (missing.length || tooMany.length) {
-    const parts = [];
-    if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
-    if (tooMany.length) parts.push(`mapped to too many columns: ${tooMany.join(', ')}`);
+  if (!Array.isArray(inputCsvFormat)) {
     errEl.className = 'alert alert-error';
-    errEl.textContent = `Column mapping error — ${parts.join('; ')}.`;
+    errEl.textContent = 'Column format must be a JSON array.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const mapCheck = buildHeaderMap(null, inputCsvFormat);
+  if (mapCheck.error) {
+    errEl.className = 'alert alert-error';
+    errEl.textContent = `Column format error: ${mapCheck.error}`;
     errEl.style.display = 'block';
     return;
   }

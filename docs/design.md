@@ -194,26 +194,24 @@ All views are mobile-friendly via a `@media (max-width: 600px)` block. Key adapt
 **User flow:**
 1. Click **Add Account** (or Edit on an existing account).
 2. Enter account name and last 4 digits.
-3. Paste the header row from the bank's CSV file.
-4. Click **Parse Columns** — the app splits the header and renders a dropdown for each column.
-5. Map each column to: skip, Date, Description, Amount, Category, or Fix.
-6. Click **Save Account**.
-7. Use **Export Settings** to generate a minified JSON blob of all account profiles.
-8. Use **Import Settings** to paste a previously exported blob and instantly restore all profiles.
+3. Type the column format JSON array directly into the **Column Format** field.
+4. Click **Save Account**.
+5. Use **Export Settings** to generate a minified JSON blob of all account profiles.
+6. Use **Import Settings** to paste a previously exported blob and instantly restore all profiles.
 
-Account profiles are stored in `state.userConfig.accounts[]` and persisted to `localStorage` under key `'financeTrackerConfig'`. `inputCsvFormat` is a positional array the length of the bank's header row; each entry is a field name or `null` (skip). Each account gets a UUID `id` on creation.
+Account profiles are stored in `state.userConfig.accounts[]` and persisted to `localStorage` under key `'financeTrackerConfig'`. `inputCsvFormat` is a positional array; each entry is a field name or `null` (skip). Each account gets a UUID `id` on creation.
 
 #### Add Account Profile
 
-Clicking **Add Account** shows `#settings-form-card` with a blank form. The user fills in account name and last 4 digits, pastes the CSV header row, clicks **Parse Columns** to generate column dropdowns, maps each column, then clicks **Save Account**. The new profile is pushed to `state.userConfig.accounts`, persisted, and appears in the settings table and account dropdowns.
+Clicking **Add Account** shows `#settings-form-card` with a blank form. The user fills in account name, last 4 digits, and the column format JSON array in `#sf-format-input`, then clicks **Save Account**. The new profile is pushed to `state.userConfig.accounts`, persisted, and appears in the settings table and account dropdowns.
 
 #### Edit Account Profile
 
-Clicking **Edit** on an existing account row pre-fills the form with the account's current values and shows `#settings-form-title` as "Edit Account". Saving updates the matching entry in `state.userConfig.accounts` by index.
+Clicking **Edit** on an existing account row pre-fills the form with the account's current values — including `#sf-format-input` populated with `JSON.stringify(account.inputCsvFormat)` — and shows `#settings-form-title` as "Edit Account". Saving updates the matching entry in `state.userConfig.accounts` by index.
 
-#### Column Mapping Validation
+#### Column Format Validation
 
-Required fields: Date, Description, Amount. If any are unmapped when **Save Account** is clicked, `#sf-form-error` is shown and the save is blocked. `amount` may be mapped to 1 or 2 columns (split debit/credit layout); mapping it to 3+ columns is rejected. Date and Description must each map to exactly 1 column. `buildHeaderMap(headerRow, inputCsvFormat)` uses `inputCsvFormat` when provided, ignoring the header values.
+`#sf-format-input` must contain a valid JSON array. On **Save Account**, the value is parsed and passed to `buildHeaderMap(null, inputCsvFormat)`. If parsing fails or `buildHeaderMap` returns an error, `#sf-form-error` is shown and the save is blocked. Allowed field values: `"date"`, `"description"`, `"amount"`, `"debit_amount"`, `"credit_amount"`, `null` (skip). Constraints enforced by `buildHeaderMap`: `date` and `description` are required exactly once; either `amount` appears exactly once, or both `debit_amount` and `credit_amount` appear exactly once — mixing `amount` with the split pair is rejected.
 
 #### Last 4 Validation
 
@@ -256,7 +254,7 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
   id:             string,   // UUID
   name:           string,   // e.g. "Chase Checking"
   last4:          string,   // 4-digit string
-  inputCsvFormat: Array,    // e.g. ["date", null, "description", "amount", "category", "fix"]; "amount" may appear twice for split debit/credit layouts
+  inputCsvFormat: Array,    // e.g. ["date", null, "description", "amount"] or ["date", "description", "debit_amount", "credit_amount"]
 }
 ```
 
@@ -291,9 +289,9 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `formatAccountKey` | `(name, last4) → string` | Returns `"Name *last4"`. |
-| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount, amountIndices, category, fix }` where `amountIndices` is the array of all column indices mapped to amount (always set; 1 entry for single-column, 2 for split debit/credit), `category` and `fix` default to `-1` if absent. Returns `{ error: "Missing required columns: Date, Description, ..." }` (capitalized) if a required field is missing. |
-| `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. For split debit/credit maps (`headerMap.amountIndices.length > 1`), exactly one amount column must be non-blank per row — both-blank → `'amount is blank'`, both-filled → `'amount is ambiguous (both debit and credit columns have values)'`. Optionally checks category. Returns error strings with 1-based row numbers. |
-| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. Strips `$` and commas from amount; when `headerMap.amountIndices` contains multiple columns, picks the first non-blank value. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
+| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount?, debitAmount?, creditAmount?, category, fix }` where `category` and `fix` default to `-1` if absent. `debitAmount` and `creditAmount` are set when the split-column pair is used instead of `amount`. Returns `{ error }` if required columns are missing, if only one of `debit_amount`/`credit_amount` is present, or if `amount` is mixed with the split pair. |
+| `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. For split maps (`headerMap.debitAmount !== undefined`), exactly one of `debitAmount`/`creditAmount` columns must be non-blank per row — both-blank → `'amount is blank'`, both-filled → `'amount is ambiguous (both debit and credit columns have values)'`. Optionally checks category. Returns error strings with 1-based row numbers. |
+| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. For split maps: reads `debitAmount` column → stored as `−|value|`; reads `creditAmount` column → stored as `+|value|` (absolute value enforced for both). For single `amount` maps: parses as-is. Strips `$` and commas. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
 | `deduplicateTransactions` | `(existing: Transaction[], incoming: Transaction[]) → Transaction[]` | Merges arrays; skips incoming entries that match an existing `accountKey|date|description|amount` key. |
 
 ### Filtering & Aggregation

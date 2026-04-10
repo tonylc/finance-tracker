@@ -707,59 +707,89 @@ function runTests() {
     });
   });
 
-  // ── buildHeaderMap — multi-amount columns ────────────────────────────────
-  suite('buildHeaderMap — multi-amount columns', () => {
-    test('given inputCsvFormat with two amount columns, amountIndices contains both', () => {
-      const m = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
-      assertEqual(m.amountIndices, [2, 3]);
-      assertEqual(m.amount, 2);
+  // ── buildHeaderMap — debit_amount / credit_amount ────────────────────────
+  suite('buildHeaderMap — debit_amount / credit_amount', () => {
+    test('maps debit_amount and credit_amount to separate indices', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
+      assertEqual(m.debitAmount, 2);
+      assertEqual(m.creditAmount, 3);
+      assert(m.amount === undefined);
     });
 
-    test('given inputCsvFormat with one amount column, amountIndices has one element', () => {
+    test('single amount column still works', () => {
       const m = buildHeaderMap(null, ['date', 'description', 'amount']);
-      assertEqual(m.amountIndices, [2]);
       assertEqual(m.amount, 2);
+      assert(m.debitAmount === undefined);
+      assert(m.creditAmount === undefined);
+    });
+
+    test('returns error when debit_amount is present without credit_amount', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'debit_amount']);
+      assert(m.error);
+      assert(m.error.includes('credit_amount'));
+    });
+
+    test('returns error when credit_amount is present without debit_amount', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'credit_amount']);
+      assert(m.error);
+      assert(m.error.includes('debit_amount'));
+    });
+
+    test('returns error when amount and debit_amount are both specified', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'amount', 'debit_amount', 'credit_amount']);
+      assert(m.error);
+      assert(m.error.includes('amount'));
     });
   });
 
-  // ── validateImport — split debit/credit amount ───────────────────────────
-  suite('validateImport — split debit/credit amount columns', () => {
-    const hdr = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
+  // ── validateImport — debit_amount / credit_amount ────────────────────────
+  suite('validateImport — debit_amount / credit_amount', () => {
+    const hdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
 
-    test('given two amount columns where debit is filled, passes', () => {
-      const r = validateImport([['2025-01-01', 'Coffee', '-4.50', '']], hdr);
+    test('given debit column filled and credit blank, passes', () => {
+      const r = validateImport([['2025-01-01', 'Coffee', '4.50', '']], hdr);
       assert(r.valid);
     });
 
-    test('given two amount columns where credit is filled, passes', () => {
+    test('given credit column filled and debit blank, passes', () => {
       const r = validateImport([['2025-01-01', 'Refund', '', '10.00']], hdr);
       assert(r.valid);
     });
 
-    test('given two amount columns both blank, fails with row number', () => {
+    test('given both columns blank, fails with row number', () => {
       const r = validateImport([['2025-01-01', 'Coffee', '', '']], hdr);
       assert(!r.valid);
       assert(r.errors[0].includes('Row 2'));
     });
 
-    test('given two amount columns both filled, fails with row number', () => {
-      const r = validateImport([['2025-01-01', 'Coffee', '-4.50', '4.50']], hdr);
+    test('given both columns filled, fails with row number', () => {
+      const r = validateImport([['2025-01-01', 'Coffee', '4.50', '4.50']], hdr);
       assert(!r.valid);
       assert(r.errors[0].includes('Row 2'));
     });
   });
 
-  // ── parseTransaction — split debit/credit amount ─────────────────────────
-  suite('parseTransaction — split debit/credit amount columns', () => {
-    const hdr = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
+  // ── parseTransaction — debit_amount / credit_amount ──────────────────────
+  suite('parseTransaction — debit_amount / credit_amount', () => {
+    const hdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
 
-    test('picks debit column when credit is blank', () => {
+    test('debit column value becomes negative', () => {
+      const t = parseTransaction(['2025-01-01', 'Coffee', '4.50', ''], hdr, 'Chase *1234');
+      assertEqual(t.amount, -4.5);
+    });
+
+    test('debit column with already-negative value still becomes negative', () => {
       const t = parseTransaction(['2025-01-01', 'Coffee', '-4.50', ''], hdr, 'Chase *1234');
       assertEqual(t.amount, -4.5);
     });
 
-    test('picks credit column when debit is blank', () => {
+    test('credit column value becomes positive', () => {
       const t = parseTransaction(['2025-01-01', 'Refund', '', '10.00'], hdr, 'Chase *1234');
+      assertEqual(t.amount, 10);
+    });
+
+    test('credit column with negative value still becomes positive', () => {
+      const t = parseTransaction(['2025-01-01', 'Refund', '', '-10.00'], hdr, 'Chase *1234');
       assertEqual(t.amount, 10);
     });
   });

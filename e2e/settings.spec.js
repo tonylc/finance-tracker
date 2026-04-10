@@ -8,16 +8,15 @@ async function openAddForm(page) {
   await expect(page.locator('#settings-form-card')).toBeVisible();
 }
 
-// Fill form, parse columns with a 3-column header, map all required fields, save
-async function fillAndSaveAccount(page, { name = 'Test Bank', last4 = '5678', header = 'Trans Date,Description,Amount' } = {}) {
+// Fill form with JSON format array and save
+async function fillAndSaveAccount(page, {
+  name = 'Test Bank',
+  last4 = '5678',
+  format = '["date","description","amount"]',
+} = {}) {
   await page.fill('#sf-name', name);
   await page.fill('#sf-last4', last4);
-  await page.fill('#sf-header-row', header);
-  await page.click('#sf-parse-btn');
-  // Map: col 0 = date, col 1 = description, col 2 = amount
-  await page.selectOption('#sf-columns-grid select[data-col-index="0"]', 'date');
-  await page.selectOption('#sf-columns-grid select[data-col-index="1"]', 'description');
-  await page.selectOption('#sf-columns-grid select[data-col-index="2"]', 'amount');
+  await page.fill('#sf-format-input', format);
   await page.click('#sf-save-btn');
 }
 
@@ -27,11 +26,9 @@ test.describe('Add Account Profile', () => {
     await openAddForm(page);
   });
 
-  test('filling name, last4, header row; parsing columns; mapping required fields; saving — account appears in table', async ({ page }) => {
+  test('filling name, last4, format; saving — account appears in table', async ({ page }) => {
     await fillAndSaveAccount(page);
-    // Form should hide
     await expect(page.locator('#settings-form-card')).toBeHidden();
-    // Account appears in settings table
     await expect(page.locator('#settings-tbody')).toContainText('Test Bank');
     await expect(page.locator('#settings-tbody')).toContainText('*5678');
   });
@@ -60,11 +57,7 @@ test.describe('Last 4 Validation', () => {
   test('last4 with non-digit characters shows validation error and blocks save', async ({ page }) => {
     await page.fill('#sf-name', 'Test Bank');
     await page.fill('#sf-last4', '12ab');
-    await page.fill('#sf-header-row', 'Date,Desc,Amount');
-    await page.click('#sf-parse-btn');
-    await page.selectOption('#sf-columns-grid select[data-col-index="0"]', 'date');
-    await page.selectOption('#sf-columns-grid select[data-col-index="1"]', 'description');
-    await page.selectOption('#sf-columns-grid select[data-col-index="2"]', 'amount');
+    await page.fill('#sf-format-input', '["date","description","amount"]');
     await page.click('#sf-save-btn');
     await expect(page.locator('#sf-form-error')).toBeVisible();
     await expect(page.locator('#sf-form-error')).toContainText('4 number');
@@ -74,31 +67,52 @@ test.describe('Last 4 Validation', () => {
   test('last4 shorter than 4 digits shows validation error and blocks save', async ({ page }) => {
     await page.fill('#sf-name', 'Test Bank');
     await page.fill('#sf-last4', '123');
-    await page.fill('#sf-header-row', 'Date,Desc,Amount');
-    await page.click('#sf-parse-btn');
-    await page.selectOption('#sf-columns-grid select[data-col-index="0"]', 'date');
-    await page.selectOption('#sf-columns-grid select[data-col-index="1"]', 'description');
-    await page.selectOption('#sf-columns-grid select[data-col-index="2"]', 'amount');
+    await page.fill('#sf-format-input', '["date","description","amount"]');
     await page.click('#sf-save-btn');
     await expect(page.locator('#sf-form-error')).toBeVisible();
   });
 });
 
-test.describe('Column Mapping Validation', () => {
+test.describe('Column Format Validation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('index.html');
     await openAddForm(page);
   });
 
-  test('saving without assigning required columns (Date, Description, Amount) blocks save', async ({ page }) => {
+  test('saving with invalid JSON shows error and blocks save', async ({ page }) => {
     await page.fill('#sf-name', 'Test Bank');
     await page.fill('#sf-last4', '5678');
-    await page.fill('#sf-header-row', 'Col1,Col2,Col3');
-    await page.click('#sf-parse-btn');
-    // Leave all columns as '— skip —'
+    await page.fill('#sf-format-input', 'not json');
     await page.click('#sf-save-btn');
     await expect(page.locator('#sf-form-error')).toBeVisible();
-    await expect(page.locator('#sf-form-error')).toContainText('required field');
+    await expect(page.locator('#sf-form-error')).toContainText('JSON');
+  });
+
+  test('saving without amount field shows error and blocks save', async ({ page }) => {
+    await page.fill('#sf-name', 'Test Bank');
+    await page.fill('#sf-last4', '5678');
+    await page.fill('#sf-format-input', '["date","description"]');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#sf-form-error')).toBeVisible();
+    await expect(page.locator('#sf-form-error')).toContainText('Amount');
+  });
+
+  test('saving with debit_amount only (no credit_amount) shows error', async ({ page }) => {
+    await page.fill('#sf-name', 'Test Bank');
+    await page.fill('#sf-last4', '5678');
+    await page.fill('#sf-format-input', '["date","description","debit_amount"]');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#sf-form-error')).toBeVisible();
+    await expect(page.locator('#sf-form-error')).toContainText('credit_amount');
+  });
+
+  test('saving with debit_amount and credit_amount succeeds', async ({ page }) => {
+    await page.fill('#sf-name', 'Test Bank');
+    await page.fill('#sf-last4', '5678');
+    await page.fill('#sf-format-input', '["date","description","debit_amount","credit_amount"]');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#settings-form-card')).toBeHidden();
+    await expect(page.locator('#settings-tbody')).toContainText('Test Bank');
   });
 });
 
@@ -112,18 +126,15 @@ test.describe('Delete Account Profile', () => {
   test('clicking delete removes account from table', async ({ page }) => {
     await expect(page.locator('#settings-tbody')).toContainText('Chase');
     await page.click('#settings-tbody button.btn-danger');
-    // Account row removed; table should be hidden (empty state shown)
     await expect(page.locator('#settings-empty')).toBeVisible();
     await expect(page.locator('#settings-table')).toBeHidden();
   });
 
   test('deleted account no longer appears in Load and Categorize dropdowns', async ({ page }) => {
     await page.click('#settings-tbody button.btn-danger');
-    // Check Load dropdown
     await page.click('[data-view="load"]');
     const loadOpts = await page.locator('#load-acct-profile option').allTextContents();
     expect(loadOpts.join('')).not.toContain('Chase');
-    // Check Categorize dropdown
     await page.click('[data-view="categorize"]');
     const catOpts = await page.locator('#cat-acct-profile option').allTextContents();
     expect(catOpts.join('')).not.toContain('Chase');
