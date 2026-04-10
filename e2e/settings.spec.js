@@ -114,6 +114,24 @@ test.describe('Column Format Validation', () => {
     await expect(page.locator('#settings-form-card')).toBeHidden();
     await expect(page.locator('#settings-tbody')).toContainText('Test Bank');
   });
+
+  test('saving with duplicate date field shows error and blocks save', async ({ page }) => {
+    await page.fill('#sf-name', 'Test Bank');
+    await page.fill('#sf-last4', '5678');
+    await page.fill('#sf-format-input', '["date","date","description","amount"]');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#sf-form-error')).toBeVisible();
+    await expect(page.locator('#sf-form-error')).toContainText('date');
+  });
+
+  test('saving with duplicate amount field shows error and blocks save', async ({ page }) => {
+    await page.fill('#sf-name', 'Test Bank');
+    await page.fill('#sf-last4', '5678');
+    await page.fill('#sf-format-input', '["date","description","amount","amount"]');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#sf-form-error')).toBeVisible();
+    await expect(page.locator('#sf-form-error')).toContainText('amount');
+  });
 });
 
 test.describe('Delete Account Profile', () => {

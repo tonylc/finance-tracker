@@ -740,6 +740,24 @@ function runTests() {
       assert(m.error);
       assert(m.error.includes('amount'));
     });
+
+    test('returns error when date appears more than once', () => {
+      const m = buildHeaderMap(null, ['date', 'date', 'description', 'amount']);
+      assert(m.error);
+      assert(m.error.includes('date'));
+    });
+
+    test('returns error when description appears more than once', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'description', 'amount']);
+      assert(m.error);
+      assert(m.error.includes('description'));
+    });
+
+    test('returns error when amount appears more than once', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'amount', 'amount']);
+      assert(m.error);
+      assert(m.error.includes('amount'));
+    });
   });
 
   // ── validateImport — debit_amount / credit_amount ────────────────────────

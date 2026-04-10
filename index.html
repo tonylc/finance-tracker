@@ -771,6 +771,12 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
       else if (field === 'credit_amount') map.creditAmount = i;
       else if (field) map[field] = i;
     });
+    const dateCt = inputCsvFormat.filter(f => f === 'date').length;
+    const descCt = inputCsvFormat.filter(f => f === 'description').length;
+    const amtCt  = inputCsvFormat.filter(f => f === 'amount').length;
+    if (dateCt > 1) return { error: 'date may only appear once' };
+    if (descCt > 1) return { error: 'description may only appear once' };
+    if (amtCt  > 1) return { error: 'amount may only appear once' };
   } else {
     // Fallback: match by lowercase header name (preserves existing behaviour)
     headerRow.forEach((h, i) => {
