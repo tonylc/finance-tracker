@@ -279,8 +279,6 @@
   #cat-bulk-count { font-size: 13px; font-weight: 600; color: #3949ab; white-space: nowrap; }
   .td-check { width: 32px; text-align: center; display: none; }
   table.multi-select-active .td-check { display: table-cell; }
-  #cat-table th.td-spend, #cat-table td.td-spend { display: none; }
-  #cat-table.bank-mode th.td-spend, #cat-table.bank-mode td.td-spend { display: table-cell; }
   tr.row-selected td { background: #e8eaf6 !important; }
   tr.row-focused td { background: #ede7f6 !important; box-shadow: inset 3px 0 0 #7c4dff; }
   #cat-multiselect-btn { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; color: #555; }
@@ -523,7 +521,6 @@
                 <th style="text-align:right;">Amount</th>
                 <th>Category</th>
                 <th style="text-align:center;">Fix</th>
-                <th class="td-spend" style="text-align:center;">Spend</th>
               </tr>
             </thead>
             <tbody id="cat-tbody"></tbody>
@@ -798,7 +795,6 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
       else if (key === 'amount') map.amount = i;
       else if (key === 'category') map.category = i;
       else if (key === 'fix') map.fix = i;
-      else if (key === 'isSpend' || key === 'is_spend') map.is_spend = i;
     });
   }
   const hasSplit = map.debitAmount !== undefined || map.creditAmount !== undefined;
@@ -847,12 +843,6 @@ function parseTransaction(fields, headerMap, accountKey) {
     })(),
     category: cat,
     fix: fixRaw === 'true' || fixRaw === '1' || fixRaw === 'yes',
-    is_spend: (() => {
-      const isSpendIdx = headerMap.is_spend;
-      const isSpendRaw = (isSpendIdx !== undefined && isSpendIdx >= 0 && fields[isSpendIdx] !== undefined)
-        ? (fields[isSpendIdx] || '').trim().toLowerCase() : null;
-      return isSpendRaw === null ? true : (isSpendRaw === 'true' || isSpendRaw === '1' || isSpendRaw === 'yes');
-    })(),
   };
 }
 
@@ -940,7 +930,7 @@ function toCSV(rows) {
     const s = String(v ?? '');
     return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const lines = ['Date,Description,Amount,Category,Fix,IsSpend'];
+  const lines = ['Date,Description,Amount,Category,Fix'];
   for (const r of rows) {
     lines.push([
       escape(r.date),
@@ -948,7 +938,6 @@ function toCSV(rows) {
       escape(r.amount),
       escape(r.category),
       r.fix ? 'true' : 'false',
-      r.is_spend !== false ? 'true' : 'false',
     ].join(','));
   }
   return lines.join('\n');
@@ -996,7 +985,7 @@ function switchView(view) {
   if (view === 'settings') renderSettingsTable();
 }
 
-const LOAD_HEADER_MAP = { date: 0, description: 1, amount: 2, category: 3, fix: 4, is_spend: 5 };
+const LOAD_HEADER_MAP = { date: 0, description: 1, amount: 2, category: 3, fix: 4 };
 const LOAD_EXPECTED_HEADERS = ['date', 'description', 'amount', 'category', 'fix'];
 
 // ══════════════════════════════════════════════════
@@ -1195,10 +1184,7 @@ function renderBudgetMonth() {
   document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
 
   const monthTx = filterByMonth(state.transactions, year, month);
-  const spendTx = monthTx.filter(t => {
-    const acct = state.userConfig.accounts.find(a => formatAccountKey(a.name, a.last4) === t.accountKey);
-    return acct?.type !== 'bank' || t.is_spend !== false;
-  });
+  const spendTx = monthTx;
   const uncategorized = spendTx.filter(t => !t.category).length;
 
   const warnEl = document.getElementById('budget-warn');
@@ -1326,9 +1312,6 @@ function handleCatImport() {
   const accountKey = formatAccountKey(account.name, account.last4);
   state.catSession = sortByDateDesc(dataRows.map(fields => parseTransaction(fields, headerMap, accountKey)));
   catAccountType = account.type || 'credit';
-  if (catAccountType === 'bank') {
-    state.catSession.forEach(t => { t.is_spend = false; });
-  }
   selectedIdxs.clear();
   toggleMultiSelect(false);
 
@@ -1369,7 +1352,6 @@ function renderCatTable() {
   const table = document.getElementById('cat-table');
   if (table) {
     table.classList.toggle('multi-select-active', multiSelectMode);
-    table.classList.toggle('bank-mode', catAccountType === 'bank');
   }
 
   // Populate bulk category dropdown once
@@ -1407,9 +1389,6 @@ function renderCatTable() {
       </td>
       <td class="td-fix">
         <input type="checkbox" data-idx="${i}" data-field="fix" ${tx.fix ? 'checked' : ''}>
-      </td>
-      <td class="td-spend">
-        <input type="checkbox" data-idx="${i}" data-field="is_spend" ${tx.is_spend !== false ? 'checked' : ''}>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1467,14 +1446,6 @@ function renderCatTable() {
     cb.addEventListener('change', e => {
       const idx = parseInt(e.target.dataset.idx);
       state.catSession[idx].fix = e.target.checked;
-    });
-  });
-
-  // Is Spend checkbox handlers
-  tbody.querySelectorAll('input[data-field=is_spend]').forEach(cb => {
-    cb.addEventListener('change', e => {
-      const idx = parseInt(e.target.dataset.idx);
-      state.catSession[idx].is_spend = e.target.checked;
     });
   });
 

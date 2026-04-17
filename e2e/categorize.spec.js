@@ -247,39 +247,10 @@ test.describe('Export Success', () => {
     const csv = await page.locator('#export-output').inputValue();
     const lines = csv.trim().split('\n');
     // Header + 2 data rows
-    expect(lines[0]).toBe('Date,Description,Amount,Category,Fix,IsSpend');
+    expect(lines[0]).toBe('Date,Description,Amount,Category,Fix');
     expect(lines.length).toBe(3);
     // Date-ascending: Coffee Roasters (03-15) first, then Whole Foods (03-20)
     expect(lines[1]).toContain('2024-03-15');
     expect(lines[2]).toContain('2024-03-20');
-  });
-});
-
-test.describe('Is Spend Flag', () => {
-  test('is_spend column hidden for credit card accounts', async ({ page }) => {
-    await seedAccounts(page);
-    await page.goto('index.html');
-    await catImport(page, '2024-03-15,Coffee Roasters,,-4.50');
-    await expect(page.locator('#cat-table th.td-spend')).toBeHidden();
-  });
-
-  test('is_spend column visible for bank accounts and defaults to unchecked', async ({ page }) => {
-    await seedBankAccount(page);
-    await page.goto('index.html');
-    await catImportBank(page, '2024-03-15,Coffee,,-4.50');
-    await expect(page.locator('#cat-table th.td-spend')).toBeVisible();
-    await expect(page.locator('#cat-tbody tr[data-idx="0"] input[data-field="is_spend"]')).not.toBeChecked();
-  });
-
-  test('checking is_spend updates state and is exported as true', async ({ page }) => {
-    await seedBankAccount(page);
-    await page.goto('index.html');
-    await catImportBank(page, '2024-03-15,Coffee Roasters,,-4.50');
-    await page.locator('#cat-tbody tr[data-idx="0"] select').selectOption('Coffee / Bakery');
-    await page.check('#cat-tbody tr[data-idx="0"] input[data-field="is_spend"]');
-    await page.click('#cat-export-btn');
-    const csv = await page.locator('#export-output').inputValue();
-    const dataLine = csv.split('\n')[1];
-    expect(dataLine).toMatch(/,true$/);
   });
 });

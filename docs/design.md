@@ -104,10 +104,6 @@ If `state.transactions` is empty, `#budget-empty` is shown and `#budget-content`
 
 Transactions in the **Transfer** parent category (subcategory: "Credit Card Payment") are excluded from `aggregateByCategory()` and therefore from the grand total shown in the banner. They are still counted in `#budget-month-tx-count` and shown in the transaction list.
 
-#### Spend Filtering
-
-Before rendering, the month's transactions are filtered by account type: non-bank (credit card) transactions are always included; bank account transactions are included only when `is_spend !== false`. This means credit card transactions remain in the budget regardless of any `is_spend` value, while bank account transactions excluded from spending (e.g. savings deposits, inter-account transfers) are hidden from totals, bar chart, and the transaction list. The filter is applied in `renderBudgetMonth()` immediately after `filterByMonth()`, before all downstream rendering.
-
 #### Full Transaction List
 
 `#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
@@ -175,11 +171,7 @@ When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, catego
 
 #### Export Success
 
-When all rows have a category, clicking **Export CSV** calls `toCSV(sortByDateAsc(state.catSession))`. The resulting CSV uses the `Date,Description,Amount,Category,Fix,IsSpend` format — Load understands all six columns. `toCSV()` handles quoting of fields containing commas, quotes, or newlines. The output is displayed in `#cat-export-card`.
-
-#### Is Spend Flag
-
-For bank accounts, a **Spend** checkbox column (`.td-spend`) appears in the categorize table. The column is hidden by default and shown only when `#cat-table` has the `bank-mode` class. All bank account rows default to `is_spend = false` when imported — the user must explicitly check Spend to mark a transaction as spending. Checking the box updates `state.catSession[idx].is_spend` immediately. The `IsSpend` value is included as a 6th column in the exported CSV, enabling round-trip fidelity when reloaded via the Load view.
+When all rows have a category, clicking **Export CSV** calls `toCSV(sortByDateAsc(state.catSession))`. The resulting CSV uses the `Date,Description,Amount,Category,Fix` format. `toCSV()` handles quoting of fields containing commas, quotes, or newlines. The output is displayed in `#cat-export-card`.
 
 ---
 
@@ -239,7 +231,7 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
 
 #### Account Type
 
-Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The value is chosen from a dropdown (`#sf-type`) in the Add/Edit form and persisted with the profile. The settings table displays `"Credit Card"` or `"Bank Account"` accordingly. The `type` field drives the Categorize tab's `is_spend` default behavior (see §2.3 Is Spend Flag) and the Budget view's spend filter (see §2.2 Spend Filtering). Missing `type` values are treated as `"credit"` everywhere.
+Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The value is chosen from a dropdown (`#sf-type`) in the Add/Edit form and persisted with the profile. The settings table displays `"Credit Card"` or `"Bank Account"` accordingly. Missing `type` values are treated as `"credit"` everywhere.
 
 ---
 
@@ -256,7 +248,6 @@ Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The v
   amount:      number,   // Negative = debit/expense, positive = credit/income
   category:    string,   // Subcategory name (see §5), or "" if uncategorized
   fix:         boolean,  // User-defined flag; imported from CSV "Fix" column
-  is_spend:    boolean,  // Whether to include in Budget totals; defaults true; false for bank acct imports
 }
 ```
 
@@ -305,7 +296,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | `formatAccountKey` | `(name, last4) → string` | Returns `"Name *last4"`. |
 | `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount?, debitAmount?, creditAmount?, category, fix }` where `category` and `fix` default to `-1` if absent. `debitAmount` and `creditAmount` are set when the split-column pair is used instead of `amount`. Returns `{ error }` if required columns are missing, if `date`/`description`/`amount` appears more than once, if only one of `debit_amount`/`credit_amount` is present, or if `amount` is mixed with the split pair. |
 | `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. For split maps (`headerMap.debitAmount !== undefined`), exactly one of `debitAmount`/`creditAmount` columns must be non-blank per row — both-blank → `'amount is blank'`, both-filled → `'amount is ambiguous (both debit and credit columns have values)'`. Optionally checks category. Returns error strings with 1-based row numbers. |
-| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. For split maps: reads `debitAmount` column → stored as `−|value|`; reads `creditAmount` column → stored as `+|value|` (absolute value enforced for both). For single `amount` maps: parses as-is. Strips `$` and commas. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). Sets `is_spend`: reads from `headerMap.is_spend` index if present; defaults to `true` when column is absent or field is missing (backward compatible with 5-col CSVs). |
+| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. For split maps: reads `debitAmount` column → stored as `−|value|`; reads `creditAmount` column → stored as `+|value|` (absolute value enforced for both). For single `amount` maps: parses as-is. Strips `$` and commas. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
 | `deduplicateTransactions` | `(existing: Transaction[], incoming: Transaction[]) → Transaction[]` | Merges arrays; skips incoming entries that match an existing `accountKey|date|description|amount` key. |
 
 ### Filtering & Aggregation
@@ -331,7 +322,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `validateExport` | `(rows) → { valid, invalidRows: number[] }` | Returns valid=false and indices of rows with blank category. |
-| `toCSV` | `(rows) → string` | Serializes rows to CSV string with header `Date,Description,Amount,Category,Fix,IsSpend`. `is_spend` is serialized as `"true"` or `"false"` (`null`/`undefined` treated as `true`). Quotes fields containing commas, quotes, or newlines. |
+| `toCSV` | `(rows) → string` | Serializes rows to CSV string with header `Date,Description,Amount,Category,Fix`. Quotes fields containing commas, quotes, or newlines. |
 
 ### Settings Import / Export
 
