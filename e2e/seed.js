@@ -10,8 +10,20 @@ const ACCOUNT = {
   id: 'seed-acct-1',
   name: 'Chase',
   last4: '1234',
+  type: 'credit',
   inputCsvFormat: ['date', 'description', null, 'amount'],
 };
+
+// Bank account profile for is_spend / Spend Filtering tests
+const BANK_ACCOUNT = {
+  id: 'seed-bank-1',
+  name: 'Bank of America',
+  last4: '5678',
+  type: 'bank',
+  inputCsvFormat: ['date', 'description', null, 'amount'],
+};
+
+const BANK_CSV = '2024-03-15,Coffee Roasters,,-4.50\n2024-03-20,Whole Foods,,-87.32';
 
 // ─── Load-tab CSV fixtures ──────────────────────────────────────────
 // Format: date,description,amount,category,fix  (5 columns, fixed)
@@ -82,6 +94,14 @@ async function seedAccounts(page, accounts = [ACCOUNT]) {
   }, accounts);
 }
 
+async function seedBankAccount(page) {
+  await page.addInitScript(acct => {
+    const config = JSON.parse(localStorage.getItem('financeTrackerConfig') || '{"accounts":[]}');
+    if (!config.accounts.find(a => a.id === acct.id)) config.accounts.push(acct);
+    localStorage.setItem('financeTrackerConfig', JSON.stringify(config));
+  }, BANK_ACCOUNT);
+}
+
 // Navigate to Load tab, select account, paste CSV, click Import.
 async function loadTransactions(page, csv, account = ACCOUNT) {
   await page.click('[data-view="load"]');
@@ -95,4 +115,4 @@ async function switchToBudget(page) {
   await page.click('[data-view="budget"]');
 }
 
-module.exports = { ACCOUNT, LOAD_CSV, CAT_CSV, seedAccounts, loadTransactions, switchToBudget };
+module.exports = { ACCOUNT, BANK_ACCOUNT, BANK_CSV, LOAD_CSV, CAT_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget };

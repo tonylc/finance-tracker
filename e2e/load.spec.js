@@ -84,6 +84,6 @@ test.describe('Per-Account Export', () => {
     await chipExportBtn.click();
     const csv = await page.locator('#load-export-output').inputValue();
     const header = csv.split('\n')[0];
-    expect(header).toBe('Date,Description,Amount,Category,Fix');
+    expect(header).toBe('Date,Description,Amount,Category,Fix,IsSpend');
   });
 });

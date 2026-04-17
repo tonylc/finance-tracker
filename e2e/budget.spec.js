@@ -1,5 +1,5 @@
 const { test, expect } = require('playwright/test');
-const { ACCOUNT, LOAD_CSV, seedAccounts, loadTransactions, switchToBudget } = require('./seed');
+const { ACCOUNT, BANK_ACCOUNT, LOAD_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget } = require('./seed');
 
 // Helper: load transactions, navigate to Budget tab
 async function setup(page, csv = LOAD_CSV.categorized) {
@@ -261,5 +261,34 @@ test.describe('Uncategorized Warning', () => {
     await switchToBudget(page);
     await expect(page.locator('#budget-warn')).toBeVisible();
     await expect(page.locator('#budget-warn')).toContainText('no category');
+  });
+});
+
+test.describe('Spend Filtering', () => {
+  test('bank account transaction with is_spend=false excluded from budget totals', async ({ page }) => {
+    await seedBankAccount(page);
+    await page.goto('index.html');
+    const csv = '2024-03-15,Grocery Store,-50.00,Groceries,false,true\n2024-03-20,Savings Deposit,-1000.00,Groceries,false,false';
+    await loadTransactions(page, csv, BANK_ACCOUNT);
+    await page.click('[data-view="budget"]');
+    await expect(page.locator('#budget-month-total-banner')).toHaveText('-$50.00');
+  });
+
+  test('bank account transaction with is_spend=true included in budget totals', async ({ page }) => {
+    await seedBankAccount(page);
+    await page.goto('index.html');
+    const csv = '2024-03-15,Grocery Store,-50.00,Groceries,false,true\n2024-03-20,Restaurant,-30.00,Restaurants,false,true';
+    await loadTransactions(page, csv, BANK_ACCOUNT);
+    await page.click('[data-view="budget"]');
+    await expect(page.locator('#budget-month-total-banner')).toHaveText('-$80.00');
+  });
+
+  test('credit card transaction with is_spend=false still included in budget totals', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    const csv = '2024-03-15,Coffee Roasters,-4.50,Coffee / Bakery,false,false';
+    await loadTransactions(page, csv, ACCOUNT);
+    await page.click('[data-view="budget"]');
+    await expect(page.locator('#budget-month-total-banner')).toHaveText('-$4.50');
   });
 });

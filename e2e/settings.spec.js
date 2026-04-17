@@ -1,6 +1,17 @@
 const { test, expect } = require('playwright/test');
 const { ACCOUNT, seedAccounts } = require('./seed');
 
+async function saveAccountWithType(page, { name, last4, format, type = 'credit' }) {
+  await page.goto('index.html');
+  await page.click('[data-view="settings"]');
+  await page.click('#settings-add-btn');
+  await page.fill('#sf-name', name);
+  await page.fill('#sf-last4', last4);
+  await page.selectOption('#sf-type', type);
+  await page.fill('#sf-format-input', format);
+  await page.click('#sf-save-btn');
+}
+
 // Navigate to Settings and click Add Account
 async function openAddForm(page) {
   await page.click('[data-view="settings"]');
@@ -166,4 +177,24 @@ test.describe('Import Settings', () => {
     await expect(page.locator('#settings-import-error')).toBeVisible();
   });
 
+});
+
+test.describe('Account Type', () => {
+  test('type:bank saved as Bank Account appears in settings table', async ({ page }) => {
+    await saveAccountWithType(page, {
+      name: 'My Bank', last4: '9999',
+      format: '["date","description",null,"amount"]',
+      type: 'bank',
+    });
+    await expect(page.locator('#settings-tbody')).toContainText('Bank Account');
+  });
+
+  test('type:credit saved as Credit Card appears in settings table', async ({ page }) => {
+    await saveAccountWithType(page, {
+      name: 'My Card', last4: '1111',
+      format: '["date","description","amount"]',
+      type: 'credit',
+    });
+    await expect(page.locator('#settings-tbody')).toContainText('Credit Card');
+  });
 });

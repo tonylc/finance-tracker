@@ -652,6 +652,30 @@ function runTests() {
       const t = parseTransaction(['2025-01-01', 'Refund', '', '-10.00'], splitHdr, 'Chase *1234');
       assertEqual(t.amount, 10);
     });
+
+    test('is_spend defaults to true when headerMap has no is_spend key', () => {
+      const map = { date: 0, description: 1, amount: 2, category: 3, fix: 4 };
+      const r = parseTransaction(['2024-01-01', 'Store', '-20', 'Groceries', 'false'], map, 'Chase *1234');
+      assertEqual(r.is_spend, true);
+    });
+
+    test('is_spend is true when column value is "true"', () => {
+      const map = { date: 0, description: 1, amount: 2, category: 3, fix: 4, is_spend: 5 };
+      const r = parseTransaction(['2024-01-01', 'Store', '-20', 'Groceries', 'false', 'true'], map, 'Chase *1234');
+      assertEqual(r.is_spend, true);
+    });
+
+    test('is_spend is false when column value is "false"', () => {
+      const map = { date: 0, description: 1, amount: 2, category: 3, fix: 4, is_spend: 5 };
+      const r = parseTransaction(['2024-01-01', 'Transfer', '-500', 'Groceries', 'false', 'false'], map, 'Chase *1234');
+      assertEqual(r.is_spend, false);
+    });
+
+    test('is_spend defaults to true when column index present but field missing (old CSV)', () => {
+      const map = { date: 0, description: 1, amount: 2, category: 3, fix: 4, is_spend: 5 };
+      const r = parseTransaction(['2024-01-01', 'Store', '-20', 'Groceries', 'false'], map, 'Chase *1234');
+      assertEqual(r.is_spend, true);
+    });
   });
 
   // ── deduplicateTransactions ───────────────────────────────────────────────
@@ -804,7 +828,7 @@ function runTests() {
   suite('toCSV', () => {
     test('outputs header row', () => {
       const csv = toCSV([]);
-      assertEqual(csv, 'Date,Description,Amount,Category,Fix');
+      assertEqual(csv, 'Date,Description,Amount,Category,Fix,IsSpend');
     });
 
     test('serializes boolean fix as true/false', () => {
@@ -828,6 +852,28 @@ function runTests() {
       assert(lines[1].includes('Starbucks'));
       assert(lines[1].includes('-4.75'));
       assert(lines[1].includes('Coffee / Bakery'));
+    });
+
+    test('includes IsSpend column in header', () => {
+      assertEqual(toCSV([]), 'Date,Description,Amount,Category,Fix,IsSpend');
+    });
+
+    test('serializes is_spend as true/false string', () => {
+      const rows = [
+        { date: '2024-01-01', description: 'A', amount: -10, category: 'Groceries', fix: false, is_spend: true },
+        { date: '2024-01-02', description: 'B', amount: -20, category: 'Groceries', fix: false, is_spend: false },
+      ];
+      const lines = toCSV(rows).split('\n');
+      assert(lines[1].endsWith(',true'), 'is_spend=true row ends with true');
+      assert(lines[2].endsWith(',false'), 'is_spend=false row ends with false');
+    });
+
+    test('serializes is_spend as true when is_spend is null', () => {
+      const rows = [
+        { date: '2024-01-01', description: 'A', amount: -10, category: 'Groceries', fix: false, is_spend: null },
+      ];
+      const lines = toCSV(rows).split('\n');
+      assert(lines[1].endsWith(',true'), 'null is_spend serializes as true');
     });
   });
 

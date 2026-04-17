@@ -279,6 +279,8 @@
   #cat-bulk-count { font-size: 13px; font-weight: 600; color: #3949ab; white-space: nowrap; }
   .td-check { width: 32px; text-align: center; display: none; }
   table.multi-select-active .td-check { display: table-cell; }
+  #cat-table th.td-spend, #cat-table td.td-spend { display: none; }
+  #cat-table.bank-mode th.td-spend, #cat-table.bank-mode td.td-spend { display: table-cell; }
   tr.row-selected td { background: #e8eaf6 !important; }
   tr.row-focused td { background: #ede7f6 !important; box-shadow: inset 3px 0 0 #7c4dff; }
   #cat-multiselect-btn { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; color: #555; }
@@ -521,6 +523,7 @@
                 <th style="text-align:right;">Amount</th>
                 <th>Category</th>
                 <th style="text-align:center;">Fix</th>
+                <th class="td-spend" style="text-align:center;">Spend</th>
               </tr>
             </thead>
             <tbody id="cat-tbody"></tbody>
@@ -553,6 +556,7 @@
           <tr>
             <th>Account Name</th>
             <th>Last 4</th>
+            <th>Type</th>
             <th>Columns Mapped</th>
             <th></th>
           </tr>
@@ -598,6 +602,13 @@
         <div class="field-sm">
           <label for="sf-last4">Last 4 Digits</label>
           <input type="text" id="sf-last4" maxlength="4" placeholder="1234">
+        </div>
+        <div class="field-sm">
+          <label for="sf-type">Account Type</label>
+          <select id="sf-type">
+            <option value="credit">Credit Card</option>
+            <option value="bank">Bank Account</option>
+          </select>
         </div>
       </div>
       <div style="margin-bottom:12px;">
@@ -786,6 +797,7 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
       else if (key === 'amount') map.amount = i;
       else if (key === 'category') map.category = i;
       else if (key === 'fix') map.fix = i;
+      else if (key === 'isSpend' || key === 'is_spend') map.is_spend = i;
     });
   }
   const hasSplit = map.debitAmount !== undefined || map.creditAmount !== undefined;
@@ -834,6 +846,12 @@ function parseTransaction(fields, headerMap, accountKey) {
     })(),
     category: cat,
     fix: fixRaw === 'true' || fixRaw === '1' || fixRaw === 'yes',
+    is_spend: (() => {
+      const isSpendIdx = headerMap.is_spend;
+      const isSpendRaw = (isSpendIdx !== undefined && isSpendIdx >= 0 && fields[isSpendIdx] !== undefined)
+        ? (fields[isSpendIdx] || '').trim().toLowerCase() : null;
+      return isSpendRaw === null ? true : (isSpendRaw === 'true' || isSpendRaw === '1' || isSpendRaw === 'yes');
+    })(),
   };
 }
 
@@ -921,7 +939,7 @@ function toCSV(rows) {
     const s = String(v ?? '');
     return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const lines = ['Date,Description,Amount,Category,Fix'];
+  const lines = ['Date,Description,Amount,Category,Fix,IsSpend'];
   for (const r of rows) {
     lines.push([
       escape(r.date),
@@ -929,6 +947,7 @@ function toCSV(rows) {
       escape(r.amount),
       escape(r.category),
       r.fix ? 'true' : 'false',
+      r.is_spend !== false ? 'true' : 'false',
     ].join(','));
   }
   return lines.join('\n');
@@ -976,7 +995,7 @@ function switchView(view) {
   if (view === 'settings') renderSettingsTable();
 }
 
-const LOAD_HEADER_MAP = { date: 0, description: 1, amount: 2, category: 3, fix: 4 };
+const LOAD_HEADER_MAP = { date: 0, description: 1, amount: 2, category: 3, fix: 4, is_spend: 5 };
 const LOAD_EXPECTED_HEADERS = ['date', 'description', 'amount', 'category', 'fix'];
 
 // ══════════════════════════════════════════════════
@@ -1100,6 +1119,7 @@ let budgetSelectedSub = null; // null = chart panel; string = active detail sub
 let selectedIdxs = new Set();
 let multiSelectMode = false;
 let focusedIdx = -1;
+let catAccountType = 'credit';
 
 document.getElementById('budget-prev').addEventListener('click', () => {
   if (budgetIdx > 0) { budgetIdx--; renderBudgetMonth(); }
@@ -1174,7 +1194,11 @@ function renderBudgetMonth() {
   document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
 
   const monthTx = filterByMonth(state.transactions, year, month);
-  const uncategorized = monthTx.filter(t => !t.category).length;
+  const spendTx = monthTx.filter(t => {
+    const acct = state.userConfig.accounts.find(a => formatAccountKey(a.name, a.last4) === t.accountKey);
+    return acct?.type !== 'bank' || t.is_spend !== false;
+  });
+  const uncategorized = spendTx.filter(t => !t.category).length;
 
   const warnEl = document.getElementById('budget-warn');
   if (uncategorized > 0) {
@@ -1185,8 +1209,8 @@ function renderBudgetMonth() {
     warnEl.style.display = 'none';
   }
 
-  currentMonthTx = monthTx;
-  renderBudgetBars(monthTx);
+  currentMonthTx = spendTx;
+  renderBudgetBars(spendTx);
   renderActiveBudgetPanel();
 }
 
@@ -1300,6 +1324,10 @@ function handleCatImport() {
 
   const accountKey = formatAccountKey(account.name, account.last4);
   state.catSession = sortByDateDesc(dataRows.map(fields => parseTransaction(fields, headerMap, accountKey)));
+  catAccountType = account.type || 'credit';
+  if (catAccountType === 'bank') {
+    state.catSession.forEach(t => { t.is_spend = false; });
+  }
   selectedIdxs.clear();
   toggleMultiSelect(false);
 
@@ -1338,7 +1366,10 @@ function renderCatTable() {
   const tbody = document.getElementById('cat-tbody');
   tbody.innerHTML = '';
   const table = document.getElementById('cat-table');
-  if (table) table.classList.toggle('multi-select-active', multiSelectMode);
+  if (table) {
+    table.classList.toggle('multi-select-active', multiSelectMode);
+    table.classList.toggle('bank-mode', catAccountType === 'bank');
+  }
 
   // Populate bulk category dropdown once
   const bulkCat = document.getElementById('cat-bulk-cat');
@@ -1375,6 +1406,9 @@ function renderCatTable() {
       </td>
       <td class="td-fix">
         <input type="checkbox" data-idx="${i}" data-field="fix" ${tx.fix ? 'checked' : ''}>
+      </td>
+      <td class="td-spend">
+        <input type="checkbox" data-idx="${i}" data-field="is_spend" ${tx.is_spend !== false ? 'checked' : ''}>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1432,6 +1466,14 @@ function renderCatTable() {
     cb.addEventListener('change', e => {
       const idx = parseInt(e.target.dataset.idx);
       state.catSession[idx].fix = e.target.checked;
+    });
+  });
+
+  // Is Spend checkbox handlers
+  tbody.querySelectorAll('input[data-field=is_spend]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      state.catSession[idx].is_spend = e.target.checked;
     });
   });
 
@@ -1678,6 +1720,7 @@ function renderSettingsTable() {
     tr.innerHTML = `
       <td>${a.name}</td>
       <td>*${a.last4}</td>
+      <td>${a.type === 'bank' ? 'Bank Account' : 'Credit Card'}</td>
       <td>${mapped} of ${a.inputCsvFormat.length} columns mapped</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-sm" style="background:#eee;color:#333;margin-right:4px;" onclick="showAccountForm('${a.id}')">Edit</button>
@@ -1693,6 +1736,7 @@ function showAccountForm(accountId) {
   document.getElementById('settings-form-title').textContent = accountId ? 'Edit Account' : 'Add Account';
   document.getElementById('sf-name').value = '';
   document.getElementById('sf-last4').value = '';
+  document.getElementById('sf-type').value = 'credit';
   document.getElementById('sf-format-input').value = '';
   document.getElementById('sf-form-error').style.display = 'none';
 
@@ -1701,6 +1745,7 @@ function showAccountForm(accountId) {
     if (account) {
       document.getElementById('sf-name').value = account.name;
       document.getElementById('sf-last4').value = account.last4;
+      document.getElementById('sf-type').value = account.type || 'credit';
       document.getElementById('sf-format-input').value = JSON.stringify(account.inputCsvFormat);
     }
   }
@@ -1760,11 +1805,13 @@ function saveAccountConfig() {
 
   errEl.style.display = 'none';
 
+  const type = document.getElementById('sf-type').value || 'credit';
+
   if (editingAccountId) {
     const idx = state.userConfig.accounts.findIndex(a => a.id === editingAccountId);
-    if (idx >= 0) state.userConfig.accounts[idx] = { ...state.userConfig.accounts[idx], name, last4, inputCsvFormat };
+    if (idx >= 0) state.userConfig.accounts[idx] = { ...state.userConfig.accounts[idx], name, last4, type, inputCsvFormat };
   } else {
-    state.userConfig.accounts.push({ id: crypto.randomUUID(), name, last4, inputCsvFormat });
+    state.userConfig.accounts.push({ id: crypto.randomUUID(), name, last4, type, inputCsvFormat });
   }
 
   saveConfig();
