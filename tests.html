@@ -317,6 +317,12 @@ function runTests() {
       assertEqual(JSON.parse(json)[0].last4, '1234');
       assertEqual(json.includes('\n'), false);
     });
+
+    test('given account with type bank, type is preserved in exported JSON', () => {
+      const accounts = [{ id: 'b1', name: 'My Bank', last4: '5678', type: 'bank', inputCsvFormat: ['date', 'description', null, 'amount'] }];
+      const json = exportAccountsJSON(accounts);
+      assertEqual(JSON.parse(json)[0].type, 'bank');
+    });
   });
 
   // ── importAccountsJSON ───────────────────────────────────────────────────
@@ -373,6 +379,13 @@ function runTests() {
       const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '12ab', inputCsvFormat: [] }]);
       const result = importAccountsJSON(input);
       assertEqual(result.ok, false);
+    });
+
+    test('given account with type bank, type is preserved after import', () => {
+      const input = JSON.stringify([{ id: 'b1', name: 'My Bank', last4: '5678', type: 'bank', inputCsvFormat: ['date', 'description', null, 'amount'] }]);
+      const result = importAccountsJSON(input);
+      assertEqual(result.ok, true);
+      assertEqual(result.accounts[0].type, 'bank');
     });
   });
 
