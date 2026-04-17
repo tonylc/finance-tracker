@@ -88,7 +88,7 @@ const testsHtml = fs.readFileSync(path.join(__dirname, 'tests.html'), 'utf8');
 const testsScript = testsHtml.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 // Grab everything from the first suite() call up to (but not including) renderResults()
-const suiteStart  = testsScript.indexOf("suite('parseCSV'");
+const suiteStart  = testsScript.indexOf("suite('");
 const renderStart = testsScript.indexOf('  renderResults()');
 const testBody    = testsScript.slice(suiteStart, renderStart);
 
