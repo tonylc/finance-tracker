@@ -112,6 +112,14 @@ Shared — Export           (§2.1 Load · §2.3 Categorize)
 
 When adding tests for a new feature, insert the suite in the matching section.
 
+### Naming Conventions
+
+| Layer | Convention | Enforced by |
+|---|---|---|
+| E2E `test.describe` label | Must exactly match the `#### Feature Name` heading in the mapped design.md section | `check-coverage.js` — bidirectional |
+| Unit `suite()` name | Must exactly match a function name listed in design.md `## 4. Library Functions` | `check-coverage.js` — suite→design only |
+| `tests.html` section banner | `// ══ §X.Y Name ══` matching the `### X.Y Name` heading | Convention only (not enforced) |
+
 ## Commit Discipline
 
 Pure refactors must always land in a **separate commit** before feature changes. Never mix a refactor with a feature in the same commit.

@@ -81,7 +81,32 @@ for (const [specFile, sectionHeading] of Object.entries(SECTION_MAP)) {
   }
 }
 
+// ── Unit suite → design.md § 4 function name check ──────────────────────
+
+function extractSection4(md) {
+  const start = md.search(/\n## 4\./);
+  if (start === -1) return '';
+  const rest = md.slice(start + 1);
+  const next = rest.search(/\n## /);
+  return next === -1 ? rest : rest.slice(0, next);
+}
+
+const section4 = extractSection4(designMd);
+const designFunctions = new Set(
+  [...section4.matchAll(/^\| `([a-zA-Z][a-zA-Z0-9]*)` /gm)].map(m => m[1])
+);
+
+const testsHtml = fs.readFileSync(path.join(__dirname, '../tests.html'), 'utf8');
+const unitSuites = [...testsHtml.matchAll(/suite\(['"]([^'"]+)['"]/g)].map(m => m[1]);
+
+for (const suiteName of unitSuites) {
+  if (!designFunctions.has(suiteName)) {
+    console.warn(`⚠  [tests.html] Orphaned suite (not in design.md § 4): "${suiteName}"`);
+    problems++;
+  }
+}
+
 if (problems === 0) {
-  console.log('✅  All test.describe blocks have matching design.md headings (and vice versa)');
+  console.log('✅  All coverage checks passed (E2E describes ↔ design.md features; unit suites ↔ design.md § 4 functions)');
 }
 process.exit(problems > 0 ? 1 : 0);

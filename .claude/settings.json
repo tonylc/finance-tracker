@@ -7,23 +7,23 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "node /home/user/finance-tracker/run-tests.js 2>&1; rc1=$?; PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js 2>&1; rc2=$?; [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && echo '{\"continue\":true}' || echo '{\"continue\":false,\"stopReason\":\"[verify we good] Tests failed — fix before committing\"}'",
+            "command": "node /home/user/finance-tracker/run-tests.js 2>&1; rc1=$?; NODE_PATH=/opt/node22/lib/node_modules PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node /opt/node22/lib/node_modules/playwright/cli.js test --config=e2e/playwright.config.js 2>&1; rc2=$?; node /home/user/finance-tracker/e2e/check-coverage.js 2>&1; rc3=$?; [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && [ $rc3 -eq 0 ] && echo '{\"continue\":true}' || echo '{\"continue\":false,\"stopReason\":\"[verify we good] Tests or coverage check failed — fix before committing\"}'",
             "timeout": 120,
-            "statusMessage": "[verify we good] Running unit + E2E tests before commit..."
+            "statusMessage": "[verify we good] Running unit + E2E tests + coverage check before commit..."
           },
           {
             "type": "command",
             "if": "Bash(git push*)",
-            "command": "node /home/user/finance-tracker/run-tests.js 2>&1; rc1=$?; PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js 2>&1; rc2=$?; [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && echo '{\"continue\":true}' || echo '{\"continue\":false,\"stopReason\":\"[verify we good] Tests failed — fix before pushing\"}'",
+            "command": "node /home/user/finance-tracker/run-tests.js 2>&1; rc1=$?; NODE_PATH=/opt/node22/lib/node_modules PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node /opt/node22/lib/node_modules/playwright/cli.js test --config=e2e/playwright.config.js 2>&1; rc2=$?; node /home/user/finance-tracker/e2e/check-coverage.js 2>&1; rc3=$?; [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && [ $rc3 -eq 0 ] && echo '{\"continue\":true}' || echo '{\"continue\":false,\"stopReason\":\"[verify we good] Tests or coverage check failed — fix before pushing\"}'",
             "timeout": 120,
-            "statusMessage": "[verify we good] Running unit + E2E tests before push..."
+            "statusMessage": "[verify we good] Running unit + E2E tests + coverage check before push..."
           },
           {
             "type": "command",
             "if": "Bash(git merge*)",
-            "command": "git -C /home/user/finance-tracker fetch origin main 2>&1 && git -C /home/user/finance-tracker rebase origin/main 2>&1; rb=$?; if [ $rb -ne 0 ]; then echo '{\"continue\":false,\"stopReason\":\"[verify we good] Rebase failed — resolve conflicts first\"}'; exit 0; fi; node /home/user/finance-tracker/run-tests.js 2>&1; rc1=$?; PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright test --config=e2e/playwright.config.js 2>&1; rc2=$?; [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && echo '{\"continue\":true}' || echo '{\"continue\":false,\"stopReason\":\"[verify we good] Tests failed after rebase — fix before merging\"}'",
+            "command": "git -C /home/user/finance-tracker fetch origin main 2>&1 && git -C /home/user/finance-tracker rebase origin/main 2>&1; rb=$?; if [ $rb -ne 0 ]; then echo '{\"continue\":false,\"stopReason\":\"[verify we good] Rebase failed — resolve conflicts first\"}'; exit 0; fi; node /home/user/finance-tracker/run-tests.js 2>&1; rc1=$?; NODE_PATH=/opt/node22/lib/node_modules PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node /opt/node22/lib/node_modules/playwright/cli.js test --config=e2e/playwright.config.js 2>&1; rc2=$?; node /home/user/finance-tracker/e2e/check-coverage.js 2>&1; rc3=$?; [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && [ $rc3 -eq 0 ] && echo '{\"continue\":true}' || echo '{\"continue\":false,\"stopReason\":\"[verify we good] Tests or coverage check failed after rebase — fix before merging\"}'",
             "timeout": 180,
-            "statusMessage": "[verify we good] Rebasing + running unit + E2E tests before merge..."
+            "statusMessage": "[verify we good] Rebasing + running unit + E2E tests + coverage check before merge..."
           }
         ]
       }
