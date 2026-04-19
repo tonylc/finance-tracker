@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-08 (split debit/credit amount columns: buildHeaderMap amountIndices, validateImport ambiguity check, parseTransaction multi-column pick, saveAccountConfig allows 1–2 amount mappings)
+> **Last updated:** 2026-04-19 (category hierarchy expanded: new parents Personal Care and Transfer; renamed Gas/EV Charging → Gas/EV Charging/Toll; added Parking, Uber, Hobbies, Toys, ATM/Cash, Fees, Insurance/DMV, Mortgage, Electronics, Home Furnishings; moved Gifts into Misc; moved Education into Transfer)
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -69,7 +69,7 @@ Each account chip in the summary includes an **Export** button. Clicking it call
 1. Navigate to Budget. If no transactions are loaded, an empty state is shown.
 2. The most recent month is displayed by default. The dark banner shows **Month Total** and **Transactions** for that month; both update as you navigate with ← →.
 3. Use **←** / **→** arrows to navigate months. The heading, banner stats, bar chart, and transaction list all update.
-4. The bar chart shows one bar per subcategory (e.g. Groceries, Gas / EV Charging), sorted by absolute spend descending.
+4. The bar chart shows one bar per subcategory (e.g. Groceries, Gas / EV Charging / Toll), sorted by absolute spend descending.
 5. A full transaction list for the current month (all categories, sorted by date) is shown below the bar chart.
 6. Click any bar to open the detail panel listing every transaction in that category for the month.
 7. Click **← All Categories** to return to the bar chart and transaction list.
@@ -348,20 +348,21 @@ Categories are two-level: **parent** (display grouping) → **subcategory** (the
 
 | Parent | Subcategories |
 |---|---|
-| Automotive | Gas / EV Charging, Service / Parts |
+| Automotive | Gas / EV Charging / Toll, Parking, Service / Parts, Uber |
+| Entertainment | Entertainment, Hobbies, Travel |
 | Food | Coffee / Bakery, Groceries, Restaurants |
-| Shopping | Clothing / Shoes, General Merchandise |
-| Entertainment | Entertainment, Travel |
-| Gifts | Gifts |
 | Healthcare | Doctor, Dental, Pharmacy |
-| Kids | Activities, Pets / Pet Care |
-| Monthly Expenses | Bills, Home Maintenance |
-| Misc | Misc, Uncategorized |
+| Kids | Activities, Pet Care, Toys |
+| Misc | ATM/Cash, Fees, Gifts, Misc, Uncategorized |
+| Monthly Expenses | Bills, Home Maintenance, Insurance / DMV, Mortgage |
+| Personal Care | Personal Care |
+| Shopping | Clothing / Shoes, Electronics, General Merchandise, Home Furnishings |
+| Transfer | Credit Card Payment, Education, Paycheck, Tax, Transfer |
 
 ### Derived Lookups (exported in `__financeLib`)
 
 - **`CAT_LIST`** — `Array<{ parent: string, subs: string[] }>` — the full hierarchy.
-- **`ALL_SUBS`** — `string[]` — flat array of all 18 subcategory names.
+- **`ALL_SUBS`** — `string[]` — flat array of all subcategory names.
 - **`VALID_CATS`** — `Set<string>` — for O(1) validation.
 - **`SUB_TO_PARENT`** — `{ [sub: string]: string }` — reverse lookup used in Budget drill-down.
 
