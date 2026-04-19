@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-19 (category hierarchy expanded: new parents Personal Care and Transfer; renamed Gas/EV Charging → Gas/EV Charging/Toll; added Parking, Uber, Hobbies, Toys, ATM/Cash, Fees, Insurance/DMV, Mortgage, Electronics, Home Furnishings; moved Gifts into Misc; moved Education into Transfer)
+> **Last updated:** 2026-04-19 (budget page: removed month navigation; added Flatpickr date-range filter, pagination (100 tx/page), and filterByDateRange library function)
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -63,58 +63,60 @@ Each account chip in the summary includes an **Export** button. Clicking it call
 
 ### 2.2 Budget
 
-**Purpose:** Visualize spending by category for a chosen month, with a full transaction list and drill-down into individual categories.
+**Purpose:** Visualize spending by category across all loaded transactions (or a custom date range), with a paginated transaction list and drill-down into individual categories.
 
 **User flow:**
 1. Navigate to Budget. If no transactions are loaded, an empty state is shown.
-2. The most recent month is displayed by default. The dark banner shows **Month Total** and **Transactions** for that month; both update as you navigate with ← →.
-3. Use **←** / **→** arrows to navigate months. The heading, banner stats, bar chart, and transaction list all update.
+2. All loaded transactions are shown by default. The dark banner shows **Total** and **Transactions** count.
+3. Optionally filter to a date range using the Flatpickr date-range picker. Click **Clear** to restore all dates.
 4. The bar chart shows one bar per subcategory (e.g. Groceries, Gas / EV Charging / Toll), sorted by absolute spend descending.
-5. A full transaction list for the current month (all categories, sorted by date) is shown below the bar chart.
-6. Click any bar to open the detail panel listing every transaction in that category for the month.
+5. A transaction list (paginated, up to 100 per page) is shown below the bar chart, sorted newest first.
+6. Click any bar to open the detail panel listing every transaction in that category.
 7. Click **← All Categories** to return to the bar chart and transaction list.
 
 #### Empty State
 
-If `state.transactions` is empty, `#budget-empty` is shown and `#budget-content` is hidden. `renderBudget()` checks `state.transactions.length > 0` before rendering any month data.
+If `state.transactions` is empty, `#budget-empty` is shown and `#budget-content` is hidden. `renderBudget()` checks `state.transactions.length > 0` before rendering.
 
-#### Month Navigation
+#### Date Range Filter
 
-`getMonthList(transactions)` extracts all unique `{ year, month }` pairs (1-based month, 1=January) from transaction dates, sorted chronologically. Transactions with blank or invalid dates are skipped. The result is stored in `budgetMonths[]`; `budgetIdx` tracks the currently displayed entry. The **←** / **→** buttons decrement/increment `budgetIdx` and call `renderBudgetMonth()`. The prev button is disabled at `budgetIdx === 0`; the next button is disabled at `budgetIdx === budgetMonths.length - 1`. `budgetMonths` and `budgetIdx` are module-level variables reset on each call to `renderBudget()`. Navigating away from Budget and back resets to the most recent month.
-
-**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+A Flatpickr date-range picker (`#budget-date-range`, `mode: 'range'`, loaded from CDN) lets the user optionally filter to a custom from–to date window. When no range is set, all loaded transactions are shown and the heading reads "All Transactions". Selecting a range updates `budgetDateFrom` / `budgetDateTo` (ISO strings or `null`) and calls `renderBudgetRange()`, which filters via `filterByDateRange()` and re-renders the chart, banner, and list. A **Clear** button (`#budget-date-clear`) resets both bounds to `null`. The heading (`#budget-heading`) displays the active range or "All Transactions".
 
 #### Transaction Search
 
-`#budget-search` sits above both panels and is always visible, including when the category drill-down is active. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, `String(amount)`, and the fix flag (`t.fix && 'fix'.includes(q)` — so queries "f", "fi", "fix" return fix-flagged transactions). An empty or whitespace-only query returns all transactions. When a search query is active, the bar chart, banner, and transaction list all update to reflect only the matching transactions. In the chart panel it filters all month transactions; in the detail panel it filters within the selected subcategory. The banner (month total, tx count) always reflects the currently visible filtered set.
+`#budget-search` sits above both panels and is always visible, including when the category drill-down is active. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, `String(amount)`, and the fix flag (`t.fix && 'fix'.includes(q)` — so queries "f", "fi", "fix" return fix-flagged transactions). An empty or whitespace-only query returns all transactions. When a search query is active, the bar chart, banner, and transaction list all update to reflect only the matching transactions. In the chart panel it filters all date-range transactions; in the detail panel it filters within the selected subcategory. The banner always reflects the currently visible filtered set. Changing the search query resets both page cursors to 0.
 
 #### Bar Chart
 
-`renderBudgetBars(txs)` accepts any transaction array and rebuilds `#budget-bars` from it — making it reusable for both full-month and search-filtered views. Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
+`renderBudgetBars(txs)` accepts any transaction array and rebuilds `#budget-bars` from it — making it reusable for both full and filtered views. Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel and resets `budgetDetailPage` to 0.
 
 **Bar colors:**
 - `#43a047` (green) — negative total (expense / money leaving)
 - `#5c6bc0` (blue) — positive total (income / money received)
 
-#### Month Banner
+#### Banner
 
-`#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card and are written in `renderBudgetMonth()` from `grandTotal` (categorized spend, Transfer excluded) and `monthTx.length` (all transactions including uncategorized). They update on every month navigation and on every search query change.
+`#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card. `grandTotal` is categorized spend with Transfer excluded; the count is all transactions in the current view (including uncategorized). Both update on every date-range change and search query change.
 
 #### Transfer Exclusion
 
-Transactions in the **Transfer** parent category (subcategory: "Credit Card Payment") are excluded from `aggregateByCategory()` and therefore from the grand total shown in the banner. They are still counted in `#budget-month-tx-count` and shown in the transaction list.
+Transactions in the **Transfer** parent category are excluded from `aggregateByCategory()` and therefore from the grand total shown in the banner. They are still counted in `#budget-month-tx-count` and shown in the transaction list.
 
 #### Full Transaction List
 
-`#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
+`#budget-tx-tbody` is populated with up to 100 transactions per page, sorted by date descending (newest first). Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
+
+#### Transaction Pagination
+
+The transaction list is paginated at 100 rows per page. `#budget-pagination` shows **← Prev**, **Page X of Y**, and **Next →**; it is hidden when ≤100 rows are in the current view. The bar chart always aggregates all date-filtered, search-filtered transactions regardless of the current page. The category detail panel has its own independent pagination (`#budget-detail-pagination`). `renderPagination(prefix, page, totalPages)` is a shared helper that updates both controls. Both page cursors (`budgetPage`, `budgetDetailPage`) reset to 0 whenever the search query or date range changes; `budgetDetailPage` resets when a new category bar is clicked.
 
 #### Category Drill-Down
 
-Transactions are filtered to `t.category === sub` (exact subcategory match), then further filtered by the search query via `filterBySearch()`, then sorted by date descending via `sortByDateDesc()`. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). When the user navigates months while the detail panel is open, `renderBudgetMonth()` re-renders the detail view for the same subcategory, so the drill-down persists across navigation. Pressing **← All Categories** clears `budgetSelectedSub` to `null`. Navigating away from Budget and back also resets it to `null`.
+Transactions are filtered to `t.category === sub` (exact subcategory match), then further filtered by the search query via `filterBySearch()`, then sorted by date descending via `sortByDateDesc()`. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). Pressing **← All Categories** clears `budgetSelectedSub` to `null` and resets `budgetDetailPage`. Navigating away from Budget and back also resets it to `null`.
 
 #### Uncategorized Warning
 
-Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. If any uncategorized transactions exist in the current month, `#budget-warn` is shown with a yellow warning banner. Transfer-category transactions do not trigger this warning.
+Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. If any uncategorized transactions exist in the current date-filtered view, `#budget-warn` is shown with a yellow warning banner. Transfer-category transactions do not trigger this warning.
 
 ---
 
@@ -304,6 +306,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `filterByMonth` | `(transactions, year: number, month: number) → Transaction[]` | Filters to a calendar month. `month` is **1-based** (1=January, 12=December). |
+| `filterByDateRange` | `(transactions, from: string\|null, to: string\|null) → Transaction[]` | Filters to transactions where `date >= from` and `date <= to`. Either bound may be `null` (unbounded). Comparison uses ISO string ordering (`YYYY-MM-DD`). |
 | `filterBySearch` | `(transactions, query: string) → Transaction[]` | Case-insensitive match against `description`, `category`, `String(amount)`, and fix flag (`t.fix && 'fix'.includes(q)`). Returns all transactions when query is blank. |
 | `aggregateByCategory` | `(transactions, excludeParents?: string[]) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. Skips any parent listed in `excludeParents` (e.g. `['Transfer']`). |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |

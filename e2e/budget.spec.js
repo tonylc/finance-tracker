@@ -1,5 +1,6 @@
 const { test, expect } = require('playwright/test');
-const { ACCOUNT, BANK_ACCOUNT, LOAD_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget } = require('./seed');
+const { ACCOUNT, BANK_ACCOUNT, LOAD_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget, buildCsv } = require('./seed');
+const INDEX_URL = 'index.html';
 
 // Helper: load transactions, navigate to Budget tab
 async function setup(page, csv = LOAD_CSV.categorized) {
@@ -19,46 +20,6 @@ test.describe('Empty State', () => {
   });
 });
 
-test.describe('Month Navigation', () => {
-  test('given transactions in multiple months, prev/next arrows navigate and heading updates', async ({ page }) => {
-    await setup(page, LOAD_CSV.multiMonth);
-    // Start at most recent (March 2024)
-    await expect(page.locator('#budget-month-label')).toHaveText('March 2024');
-    // Navigate back to February
-    await page.click('#budget-prev');
-    await expect(page.locator('#budget-month-label')).toHaveText('February 2024');
-    // Navigate back to January
-    await page.click('#budget-prev');
-    await expect(page.locator('#budget-month-label')).toHaveText('January 2024');
-    // Navigate forward to February
-    await page.click('#budget-next');
-    await expect(page.locator('#budget-month-label')).toHaveText('February 2024');
-  });
-
-  test('at the oldest month, prev button is disabled', async ({ page }) => {
-    await setup(page, LOAD_CSV.multiMonth);
-    await page.click('#budget-prev');
-    await page.click('#budget-prev');
-    await expect(page.locator('#budget-prev')).toBeDisabled();
-    await expect(page.locator('#budget-next')).not.toBeDisabled();
-  });
-
-  test('at the newest month, next button is disabled', async ({ page }) => {
-    await setup(page, LOAD_CSV.multiMonth);
-    await expect(page.locator('#budget-next')).toBeDisabled();
-    await expect(page.locator('#budget-prev')).not.toBeDisabled();
-  });
-
-  test('navigating away from Budget and back resets to most recent month', async ({ page }) => {
-    await setup(page, LOAD_CSV.multiMonth);
-    await page.click('#budget-prev');
-    await page.click('#budget-prev');
-    await expect(page.locator('#budget-month-label')).toHaveText('January 2024');
-    await page.click('[data-view="load"]');
-    await page.click('[data-view="budget"]');
-    await expect(page.locator('#budget-month-label')).toHaveText('March 2024');
-  });
-});
 
 test.describe('Transaction Search', () => {
   test.beforeEach(async ({ page }) => {
@@ -99,8 +60,8 @@ test.describe('Bar Chart', () => {
   });
 });
 
-test.describe('Month Banner', () => {
-  test('banner shows correct total and transaction count for the selected month', async ({ page }) => {
+test.describe('Banner', () => {
+  test('banner shows correct total and transaction count for loaded transactions', async ({ page }) => {
     await setup(page, LOAD_CSV.categorized);
     // 3 transactions totalling -$95.07 (no Transfers)
     await expect(page.locator('#budget-month-total-banner')).toHaveText('-$95.07');
@@ -166,23 +127,6 @@ test.describe('Category Drill-Down', () => {
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(2);
     await page.fill('#budget-search', 'roasters');
     await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(1);
-  });
-
-  test('navigating months while drill-down is open re-renders detail for same subcategory', async ({ page }) => {
-    await seedAccounts(page);
-    await page.goto('index.html');
-    const multiCatCsv = [
-      '2024-01-10,January Coffee,-3.00,Coffee / Bakery,false',
-      '2024-03-15,March Coffee,-4.50,Coffee / Bakery,false',
-    ].join('\n');
-    await loadTransactions(page, multiCatCsv);
-    await switchToBudget(page);
-    await page.locator('#budget-bars .budget-bar-row').filter({ hasText: 'Coffee / Bakery' }).click();
-    await expect(page.locator('#budget-detail-title')).toHaveText('Coffee / Bakery');
-    await page.click('#budget-prev');
-    await expect(page.locator('#budget-detail-title')).toHaveText('Coffee / Bakery');
-    await expect(page.locator('#budget-detail-tbody .tx-row')).toHaveCount(1);
-    await expect(page.locator('#budget-detail-tbody .tx-row').first()).toContainText('January Coffee');
   });
 
   test('search updates banner total and tx list count in sync', async ({ page }) => {
@@ -261,5 +205,72 @@ test.describe('Uncategorized Warning', () => {
     await switchToBudget(page);
     await expect(page.locator('#budget-warn')).toBeVisible();
     await expect(page.locator('#budget-warn')).toContainText('no category');
+  });
+});
+
+test.describe('Date Range Filter', () => {
+  test('given a date range, shows only transactions within that range', async ({ page }) => {
+    await seedAccounts(page);
+    const csv = [
+      '2026-01-10,January Expense,-50.00,Groceries,false',
+      '2026-01-20,January Coffee,-5.00,Groceries,false',
+      '2026-03-15,March Expense,-40.00,Groceries,false',
+    ].join('\n');
+    await page.goto(INDEX_URL);
+    await loadTransactions(page, csv);
+    await switchToBudget(page);
+    // Drive date range via global state (CDN may not load in local file tests)
+    await page.evaluate(() => {
+      budgetDateFrom = '2026-01-01';
+      budgetDateTo   = '2026-01-31';
+      renderBudgetRange();
+    });
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
+  });
+
+  test('clearing the date range restores all transactions', async ({ page }) => {
+    await seedAccounts(page);
+    const csv = [
+      '2026-01-10,Jan,-50.00,Groceries,false',
+      '2026-03-15,Mar,-40.00,Groceries,false',
+    ].join('\n');
+    await page.goto(INDEX_URL);
+    await loadTransactions(page, csv);
+    await switchToBudget(page);
+    await page.evaluate(() => {
+      budgetDateFrom = '2026-01-01';
+      budgetDateTo   = '2026-01-31';
+      renderBudgetRange();
+    });
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('1');
+    // Clear via button (sets budgetDateFrom/To to null and re-renders)
+    await page.evaluate(() => {
+      budgetDateFrom = null;
+      budgetDateTo   = null;
+      renderBudgetRange();
+    });
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
+  });
+});
+
+test.describe('Transaction Pagination', () => {
+  test('given fewer than 100 transactions, pagination controls are hidden', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto(INDEX_URL);
+    await loadTransactions(page, buildCsv(5));
+    await switchToBudget(page);
+    await expect(page.locator('#budget-pagination')).toBeHidden();
+  });
+
+  test('given more than 100 transactions, next page button appears and navigates to page 2', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto(INDEX_URL);
+    await loadTransactions(page, buildCsv(110));
+    await switchToBudget(page);
+    await expect(page.locator('#budget-pagination')).toBeVisible();
+    const firstDesc = await page.locator('#budget-tx-tbody tr.tx-row:first-child td:nth-child(2)').textContent();
+    await page.click('#budget-page-next');
+    const secondPageDesc = await page.locator('#budget-tx-tbody tr.tx-row:first-child td:nth-child(2)').textContent();
+    expect(secondPageDesc).not.toBe(firstDesc);
   });
 });

@@ -83,7 +83,7 @@ function runTests() {
   }
   const {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
-    parseTransaction, deduplicateTransactions, filterByMonth,
+    parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange,
     aggregateByCategory, totalSpend, cycleCategoryByKey,
     validateExport, toCSV, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
     exportAccountsJSON, importAccountsJSON, isValidLast4, ALL_SUBS, VALID_CATS,
@@ -206,6 +206,46 @@ function runTests() {
 
     test('given no transactions, returns empty array', () => {
       assertEqual(getMonthList([]), []);
+    });
+  });
+
+  // ── filterByDateRange ─────────────────────────────────────────────────────
+  suite('filterByDateRange', () => {
+    const txs = [
+      { id:'1', date:'2026-01-15', description:'A', amount:-10, category:'Food', accountKey:'X', fix:false },
+      { id:'2', date:'2026-02-01', description:'B', amount:-20, category:'Food', accountKey:'X', fix:false },
+      { id:'3', date:'2026-03-31', description:'C', amount:-30, category:'Food', accountKey:'X', fix:false },
+    ];
+
+    test('given null from and null to, returns all transactions', () => {
+      assertEqual(filterByDateRange(txs, null, null).length, 3);
+    });
+
+    test('given from date, returns transactions on or after that date', () => {
+      const r = filterByDateRange(txs, '2026-02-01', null);
+      assertEqual(r.length, 2);
+      assert(r.every(t => t.date >= '2026-02-01'), 'all on or after from');
+    });
+
+    test('given to date, returns transactions on or before that date', () => {
+      const r = filterByDateRange(txs, null, '2026-02-01');
+      assertEqual(r.length, 2);
+      assert(r.every(t => t.date <= '2026-02-01'), 'all on or before to');
+    });
+
+    test('given from and to, returns only transactions within range', () => {
+      const r = filterByDateRange(txs, '2026-02-01', '2026-03-30');
+      assertEqual(r.length, 1);
+      assertEqual(r[0].id, '2');
+    });
+
+    test('boundary dates are inclusive on both ends', () => {
+      const r = filterByDateRange(txs, '2026-01-15', '2026-03-31');
+      assertEqual(r.length, 3);
+    });
+
+    test('given from after all dates, returns empty array', () => {
+      assertEqual(filterByDateRange(txs, '2027-01-01', null).length, 0);
     });
   });
 
