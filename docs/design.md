@@ -287,7 +287,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `parseCSV` | `(raw: string) → string[][]` | Parses full CSV text into a 2D array of fields. Strips BOM, normalizes CRLF, skips blank lines. |
-| `parseCSVLine` | `(line: string) → string[]` | Parses a single CSV line. Handles quoted fields, embedded commas, escaped `""` quotes. Trims unquoted fields. |
+| `parseCSVLine` | `(line: string) → string[]` | Parses a single CSV line. Handles quoted fields, embedded commas, escaped `""` quotes, and unescaped inner quotes (treated as literals — liberal quote handling matching Excel/Sheets behaviour). Trims unquoted fields. |
 
 ### Import Pipeline
 

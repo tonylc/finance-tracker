@@ -1,6 +1,14 @@
 const { test, expect } = require('playwright/test');
 const { ACCOUNT, BANK_ACCOUNT, CAT_CSV, seedAccounts, seedBankAccount } = require('./seed');
 
+const QUOTED_ACCOUNT = {
+  id: 'seed-quoted-1',
+  name: 'QuoteBank',
+  last4: '9999',
+  type: 'credit',
+  inputCsvFormat: ['date', 'description', 'amount', null],
+};
+
 // Import a CSV via the Categorize tab
 async function catImport(page, csv = CAT_CSV.simple) {
   await page.click('[data-view="categorize"]');
@@ -252,5 +260,20 @@ test.describe('Export Success', () => {
     // Date-ascending: Coffee Roasters (03-15) first, then Whole Foods (03-20)
     expect(lines[1]).toContain('2024-03-15');
     expect(lines[2]).toContain('2024-03-20');
+  });
+});
+
+
+test.describe('Quoted Field Parsing', () => {
+  test('given description with unescaped inner quotes, amount and description parse correctly', async ({ page }) => {
+    await seedAccounts(page, [ACCOUNT, QUOTED_ACCOUNT]);
+    await page.goto('index.html');
+    await page.click('[data-view="categorize"]');
+    await page.selectOption('#cat-acct-profile', QUOTED_ACCOUNT.id);
+    await page.fill('#cat-csv', '02/11/2026,"Payment for "991"; Conf# loc30o69b","-120.00","1,000.00"');
+    await page.click('#cat-import-btn');
+    const row = page.locator('#cat-tbody tr[data-idx="0"]');
+    await expect(row).toContainText('Payment for "991"; Conf# loc30o69b');
+    await expect(row).toContainText('-$120.00');
   });
 });
