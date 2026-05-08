@@ -147,31 +147,73 @@
   .cat-error select { border-color: #e53935 !important; background: #fff0f0; }
 
   /* ── Budget view ── */
-  .budget-header {
+  .budget-range-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
-    gap: 12px;
   }
-  .month-nav {
+  .budget-range-label { font-size: 13px; font-weight: 600; color: #555; white-space: nowrap; }
+  .budget-preset-wrap { position: relative; }
+  .budget-preset-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 2px solid #1565c0;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 120px;
+    justify-content: space-between;
+  }
+  .budget-preset-btn:hover { background: #e8f0fe; }
+  .budget-preset-btn.no-filter { border-color: #ccc; }
+  .budget-preset-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.12);
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    min-width: 140px;
+    z-index: 100;
+  }
+  .budget-preset-menu li { padding: 10px 16px; cursor: pointer; font-size: 14px; }
+  .budget-preset-menu li:hover { background: #f5f5f5; }
+  .budget-preset-menu li.selected { font-weight: 700; }
+  .budget-date-display {
+    font-size: 13px;
+    color: #555;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 6px 12px;
+    background: #fafafa;
+    flex: 1;
+    white-space: nowrap;
+  }
+  .pagination-bar {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 8px 0;
+    justify-content: center;
+    font-size: 14px;
   }
-  .month-nav button {
-    background: #fff;
+  .pagination-bar button {
+    padding: 4px 12px;
     border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 5px 12px;
+    border-radius: 4px;
+    background: white;
     cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    transition: background .1s;
   }
-  .month-nav button:hover { background: #f0f0f0; }
-  .month-nav button:disabled { opacity: .3; cursor: not-allowed; }
+  .pagination-bar button:disabled { opacity: .3; cursor: default; }
   /* ── Budget bar chart ── */
   #budget-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
   .budget-bar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
@@ -184,9 +226,6 @@
   .budget-bar-count { width: 50px; font-size: 11px; color: #888; flex-shrink: 0; }
   .btn-secondary { background:#fff; border:1px solid #ccc; border-radius:4px; padding:4px 10px; cursor:pointer; font-size:13px; }
   .btn-secondary:hover { background:#f0f0f0; }
-  #budget-month-label { font-size: 16px; font-weight: 700; min-width: 120px; text-align: center; }
-  #budget-month-heading { font-size: 22px; font-weight: 700; color: #1a1a2e; text-align: center; margin-bottom: 4px; }
-
   .total-banner {
     background: #1a1a2e;
     color: #fff;
@@ -296,7 +335,6 @@
     .budget-bar-sub { font-size: 12px; }
     .budget-bar-count { display: none; }
     .budget-bar-amount { width: 68px; font-size: 12px; }
-    #budget-month-heading { font-size: 17px; }
     .total-banner { gap: 16px; padding: 12px 14px; }
     .total-banner .stat-value { font-size: 18px; }
     .td-desc { max-width: 110px; }
@@ -400,13 +438,24 @@
       </div>
 
       <div class="card">
-        <div id="budget-month-heading"></div>
-        <div class="budget-header">
-          <div class="month-nav">
-            <button id="budget-prev" title="Previous month">&#8592;</button>
-            <span id="budget-month-label"></span>
-            <button id="budget-next" title="Next month">&#8594;</button>
+        <div class="budget-range-row">
+          <span class="budget-range-label">Date range</span>
+          <div class="budget-preset-wrap">
+            <button id="budget-preset-btn" class="budget-preset-btn no-filter">
+              <span id="budget-preset-btn-text">All Dates</span>
+              <span id="budget-preset-arrow" class="preset-arrow">&#9660;</span>
+            </button>
+            <ul id="budget-preset-menu" class="budget-preset-menu" hidden>
+              <li data-preset="all" class="selected">All Dates</li>
+              <li data-preset="this-month">This Month</li>
+              <li data-preset="last-month">Last Month</li>
+              <li data-preset="90-days">90 Days</li>
+              <li data-preset="1-year">1 Year</li>
+              <li data-preset="this-year">This Year</li>
+              <li data-preset="last-year">Last Year</li>
+            </ul>
           </div>
+          <div id="budget-date-display" class="budget-date-display" style="display:none;"></div>
         </div>
 
         <div id="budget-warn" style="display:none;"></div>
@@ -433,6 +482,11 @@
               </thead>
               <tbody id="budget-tx-tbody"></tbody>
             </table>
+            <div id="budget-pagination" class="pagination-bar" style="display:none;">
+              <button id="budget-page-prev">&#8592; Prev</button>
+              <span id="budget-page-info">Page 1 of 1</span>
+              <button id="budget-page-next">Next &#8594;</button>
+            </div>
           </div>
         </div>
 
@@ -454,6 +508,11 @@
             </thead>
             <tbody id="budget-detail-tbody"></tbody>
           </table>
+          <div id="budget-detail-pagination" class="pagination-bar" style="display:none;">
+            <button id="budget-detail-page-prev">&#8592; Prev</button>
+            <span id="budget-detail-page-info">Page 1 of 1</span>
+            <button id="budget-detail-page-next">Next &#8594;</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1103,27 +1162,123 @@ document.getElementById('load-copy-btn').addEventListener('click', () => {
 // ══════════════════════════════════════════════════
 //  BUDGET VIEW
 // ══════════════════════════════════════════════════
-let budgetMonths = [];
-let budgetIdx = 0;
-let currentMonthTx = [];
+let budgetPreset    = null;
+let budgetDateFrom  = null;
+let budgetDateTo    = null;
+let budgetPage      = 0;
+let budgetDetailPage = 0;
+let currentBudgetTx = [];
 let budgetSelectedSub = null; // null = chart panel; string = active detail sub
 let selectedIdxs = new Set();
 let multiSelectMode = false;
 let focusedIdx = -1;
 let catAccountType = 'credit';
 
-document.getElementById('budget-prev').addEventListener('click', () => {
-  if (budgetIdx > 0) { budgetIdx--; renderBudgetMonth(); }
+function filterByDateRange(transactions, from, to) {
+  return transactions.filter(t => {
+    if (from && t.date < from) return false;
+    if (to   && t.date > to)   return false;
+    return true;
+  });
+}
+
+function computePresetRange(preset) {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const iso = d => d.toISOString().slice(0, 10);
+  if (preset === 'this-month')
+    return { from: `${y}-${String(m+1).padStart(2,'0')}-01`, to: iso(new Date(y, m+1, 0)) };
+  if (preset === 'last-month') {
+    const lm = m === 0 ? 11 : m-1, ly = m === 0 ? y-1 : y;
+    return { from: `${ly}-${String(lm+1).padStart(2,'0')}-01`, to: iso(new Date(ly, lm+1, 0)) };
+  }
+  if (preset === '90-days') {
+    const f = new Date(now); f.setDate(f.getDate() - 89);
+    return { from: iso(f), to: iso(now) };
+  }
+  if (preset === '1-year') {
+    const f = new Date(now); f.setFullYear(f.getFullYear() - 1);
+    return { from: iso(f), to: iso(now) };
+  }
+  if (preset === 'this-year') return { from: `${y}-01-01`, to: `${y}-12-31` };
+  if (preset === 'last-year') return { from: `${y-1}-01-01`, to: `${y-1}-12-31` };
+  return { from: null, to: null };
+}
+
+function fmtDisplayDate(iso) {
+  const [y, mo, d] = iso.split('-');
+  return `${parseInt(mo)}/${parseInt(d)}/${y}`;
+}
+
+function renderPagination(prefix, page, totalPages) {
+  const bar = document.getElementById(`${prefix}-pagination`);
+  if (totalPages <= 1) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  document.getElementById(`${prefix}-page-prev`).disabled = page === 0;
+  document.getElementById(`${prefix}-page-next`).disabled = page === totalPages - 1;
+  document.getElementById(`${prefix}-page-info`).textContent = `Page ${page + 1} of ${totalPages}`;
+}
+
+document.getElementById('budget-preset-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const menu = document.getElementById('budget-preset-menu');
+  const isOpen = !menu.hidden;
+  menu.hidden = isOpen;
+  document.getElementById('budget-preset-arrow').textContent = isOpen ? '▼' : '▲';
 });
-document.getElementById('budget-next').addEventListener('click', () => {
-  if (budgetIdx < budgetMonths.length - 1) { budgetIdx++; renderBudgetMonth(); }
+
+document.querySelectorAll('#budget-preset-menu li').forEach(li => {
+  li.addEventListener('click', () => {
+    const preset = li.dataset.preset;
+    budgetPreset = preset === 'all' ? null : preset;
+    const { from, to } = computePresetRange(budgetPreset || 'all');
+    budgetDateFrom = from;
+    budgetDateTo   = to;
+
+    document.getElementById('budget-preset-btn-text').textContent = li.textContent;
+    document.getElementById('budget-preset-menu').hidden = true;
+    document.getElementById('budget-preset-arrow').textContent = '▼';
+    document.getElementById('budget-preset-btn').classList.toggle('no-filter', !budgetPreset);
+
+    document.querySelectorAll('#budget-preset-menu li').forEach(l => l.classList.remove('selected'));
+    li.classList.add('selected');
+
+    const display = document.getElementById('budget-date-display');
+    if (from && to) {
+      display.textContent = `From ${fmtDisplayDate(from)}  to  ${fmtDisplayDate(to)}`;
+      display.style.display = 'block';
+    } else {
+      display.style.display = 'none';
+    }
+    renderBudgetRange();
+  });
 });
+
+document.addEventListener('click', () => {
+  const menu = document.getElementById('budget-preset-menu');
+  if (menu) {
+    menu.hidden = true;
+    document.getElementById('budget-preset-arrow').textContent = '▼';
+  }
+});
+
 document.getElementById('budget-search').addEventListener('input', () => {
-  renderActiveBudgetPanel();
+  budgetPage = 0; budgetDetailPage = 0; renderActiveBudgetPanel();
 });
 document.getElementById('budget-back-btn').addEventListener('click', () => {
-  budgetSelectedSub = null;
-  renderActiveBudgetPanel();
+  budgetSelectedSub = null; budgetDetailPage = 0; renderActiveBudgetPanel();
+});
+document.getElementById('budget-page-prev').addEventListener('click', () => {
+  if (budgetPage > 0) { budgetPage--; renderActiveBudgetPanel(); }
+});
+document.getElementById('budget-page-next').addEventListener('click', () => {
+  budgetPage++; renderActiveBudgetPanel();
+});
+document.getElementById('budget-detail-page-prev').addEventListener('click', () => {
+  if (budgetDetailPage > 0) { budgetDetailPage--; renderActiveBudgetPanel(); }
+});
+document.getElementById('budget-detail-page-next').addEventListener('click', () => {
+  budgetDetailPage++; renderActiveBudgetPanel();
 });
 
 function renderBudget() {
@@ -1131,12 +1286,29 @@ function renderBudget() {
   document.getElementById('budget-empty').style.display = hasData ? 'none' : 'block';
   document.getElementById('budget-content').style.display = hasData ? 'block' : 'none';
   if (!hasData) return;
+  budgetPreset = null; budgetDateFrom = null; budgetDateTo = null;
+  budgetPage = 0; budgetDetailPage = 0; budgetSelectedSub = null;
+  document.getElementById('budget-preset-btn-text').textContent = 'All Dates';
+  document.getElementById('budget-preset-btn').classList.add('no-filter');
+  document.querySelectorAll('#budget-preset-menu li').forEach(l => l.classList.remove('selected'));
+  document.querySelector('#budget-preset-menu li[data-preset="all"]').classList.add('selected');
+  document.getElementById('budget-date-display').style.display = 'none';
+  renderBudgetRange();
+}
 
-  budgetMonths = getMonthList(state.transactions);
-  // Default to most recent month
-  budgetIdx = budgetMonths.length - 1;
+function renderBudgetRange() {
+  const filtered = filterByDateRange(state.transactions, budgetDateFrom, budgetDateTo);
+  const uncategorized = filtered.filter(t => !t.category).length;
+  const warnEl = document.getElementById('budget-warn');
+  warnEl.style.display = uncategorized > 0 ? 'block' : 'none';
+  if (uncategorized > 0) {
+    warnEl.className = 'alert alert-warn';
+    warnEl.textContent = `${uncategorized} transaction(s) have no category and are excluded from totals.`;
+  }
+  currentBudgetTx = filtered;
+  budgetPage = 0;
   budgetSelectedSub = null;
-  renderBudgetMonth();
+  renderActiveBudgetPanel();
 }
 
 function renderBudgetBars(txs) {
@@ -1170,36 +1342,9 @@ function renderBudgetBars(txs) {
       <div class="budget-bar-amount ${total < 0 ? 'neg' : 'pos'}">${fmtAmount(total)}</div>
       <div class="budget-bar-count">${count} tx</div>
     `;
-    row.addEventListener('click', () => { budgetSelectedSub = sub; renderActiveBudgetPanel(); });
+    row.addEventListener('click', () => { budgetSelectedSub = sub; budgetDetailPage = 0; renderActiveBudgetPanel(); });
     barsEl.appendChild(row);
   });
-}
-
-function renderBudgetMonth() {
-  if (!budgetMonths.length) return;
-  const { year, month } = budgetMonths[budgetIdx];
-  const label = `${MONTH_NAMES[month - 1]} ${year}`;
-  document.getElementById('budget-month-label').textContent = label;
-  document.getElementById('budget-month-heading').textContent = label;
-  document.getElementById('budget-prev').disabled = budgetIdx === 0;
-  document.getElementById('budget-next').disabled = budgetIdx === budgetMonths.length - 1;
-
-  const monthTx = filterByMonth(state.transactions, year, month);
-  const spendTx = monthTx;
-  const uncategorized = spendTx.filter(t => !t.category).length;
-
-  const warnEl = document.getElementById('budget-warn');
-  if (uncategorized > 0) {
-    warnEl.className = 'alert alert-warn';
-    warnEl.textContent = `${uncategorized} transaction(s) this month have no category and are excluded from totals.`;
-    warnEl.style.display = 'block';
-  } else {
-    warnEl.style.display = 'none';
-  }
-
-  currentMonthTx = spendTx;
-  renderBudgetBars(spendTx);
-  renderActiveBudgetPanel();
 }
 
 function appendTxRows(tbody, txs) {
@@ -1230,15 +1375,19 @@ function renderBudgetTxList(txs) {
   document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
   document.getElementById('budget-month-tx-count').textContent = txs.length;
 
+  const sorted = sortByDateDesc(txs);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / 100));
+  budgetPage = Math.min(budgetPage, totalPages - 1);
   const txTbody = document.getElementById('budget-tx-tbody');
   txTbody.innerHTML = '';
-  appendTxRows(txTbody, sortByDateDesc(txs));
+  appendTxRows(txTbody, sorted.slice(budgetPage * 100, (budgetPage + 1) * 100));
+  renderPagination('budget', budgetPage, totalPages);
 }
 
 function renderActiveBudgetPanel() {
   const query = document.getElementById('budget-search').value;
   if (budgetSelectedSub !== null) {
-    const categoryTx = currentMonthTx.filter(t => t.category === budgetSelectedSub);
+    const categoryTx = currentBudgetTx.filter(t => t.category === budgetSelectedSub);
     const txs = sortByDateDesc(filterBySearch(categoryTx, query));
     const { grandTotal } = aggregateByCategory(txs, ['Transfer']);
     document.getElementById('budget-month-total-banner').textContent = fmtAmount(grandTotal);
@@ -1246,13 +1395,16 @@ function renderActiveBudgetPanel() {
     document.getElementById('budget-detail-title').textContent = budgetSelectedSub;
     document.getElementById('budget-chart-panel').style.display = 'none';
     document.getElementById('budget-detail-panel').style.display = 'block';
+    const totalPages = Math.max(1, Math.ceil(txs.length / 100));
+    budgetDetailPage = Math.min(budgetDetailPage, totalPages - 1);
     const tbody = document.getElementById('budget-detail-tbody');
     tbody.innerHTML = '';
-    appendTxRows(tbody, txs);
+    appendTxRows(tbody, txs.slice(budgetDetailPage * 100, (budgetDetailPage + 1) * 100));
+    renderPagination('budget-detail', budgetDetailPage, totalPages);
   } else {
     document.getElementById('budget-chart-panel').style.display = 'block';
     document.getElementById('budget-detail-panel').style.display = 'none';
-    const filtered = filterBySearch(currentMonthTx, query);
+    const filtered = filterBySearch(currentBudgetTx, query);
     renderBudgetBars(filtered);
     renderBudgetTxList(filtered);
   }
@@ -1874,7 +2026,7 @@ function importAccountsJSON(jsonString) {
 
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
-  parseTransaction, deduplicateTransactions, filterByMonth, filterBySearch, aggregateByCategory,
+  parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
   exportAccountsJSON, importAccountsJSON, isValidLast4,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,

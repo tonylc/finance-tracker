@@ -1,6 +1,6 @@
 # Finance Tracker — Design Document
 
-> **Last updated:** 2026-04-19 (category hierarchy expanded: new parents Personal Care and Transfer; renamed Gas/EV Charging → Gas/EV Charging/Toll; added Parking, Uber, Hobbies, Toys, ATM/Cash, Fees, Insurance/DMV, Mortgage, Electronics, Home Furnishings; moved Gifts into Misc; moved Education into Transfer)
+> **Last updated:** 2026-05-08 (Budget: replaced month navigation with preset date range filter; added transaction pagination)
 > **Status:** Current
 
 This document describes the Finance Tracker application: what it does, why it is built the way it is, and the detailed engineering decisions underlying each part. It is the authoritative reference for future development.
@@ -63,42 +63,58 @@ Each account chip in the summary includes an **Export** button. Clicking it call
 
 ### 2.2 Budget
 
-**Purpose:** Visualize spending by category for a chosen month, with a full transaction list and drill-down into individual categories.
+**Purpose:** Visualize spending by category across a selectable date range, with a full transaction list, pagination, and drill-down into individual categories.
 
 **User flow:**
 1. Navigate to Budget. If no transactions are loaded, an empty state is shown.
-2. The most recent month is displayed by default. The dark banner shows **Month Total** and **Transactions** for that month; both update as you navigate with ← →.
-3. Use **←** / **→** arrows to navigate months. The heading, banner stats, bar chart, and transaction list all update.
-4. The bar chart shows one bar per subcategory (e.g. Groceries, Gas / EV Charging / Toll), sorted by absolute spend descending.
-5. A full transaction list for the current month (all categories, sorted by date) is shown below the bar chart.
-6. Click any bar to open the detail panel listing every transaction in that category for the month.
+2. All transactions are shown by default ("All Dates"). The dark banner shows **Month Total** (spending excluding Transfers) and **Transactions** (total count).
+3. Select a preset from the **Date range** dropdown to narrow the view: This Month, Last Month, 90 Days, 1 Year, This Year, Last Year. A "From … to …" display shows the active date bounds.
+4. The bar chart shows one bar per subcategory, sorted by absolute spend descending.
+5. A full transaction list (all categories, sorted by date descending, paginated 100/page) is shown below the bar chart.
+6. Click any bar to open the detail panel listing every transaction in that subcategory.
 7. Click **← All Categories** to return to the bar chart and transaction list.
 
 #### Empty State
 
-If `state.transactions` is empty, `#budget-empty` is shown and `#budget-content` is hidden. `renderBudget()` checks `state.transactions.length > 0` before rendering any month data.
+If `state.transactions` is empty, `#budget-empty` is shown and `#budget-content` is hidden. `renderBudget()` checks `state.transactions.length > 0` before rendering.
 
-#### Month Navigation
+#### Date Range Filter
 
-`getMonthList(transactions)` extracts all unique `{ year, month }` pairs (1-based month, 1=January) from transaction dates, sorted chronologically. Transactions with blank or invalid dates are skipped. The result is stored in `budgetMonths[]`; `budgetIdx` tracks the currently displayed entry. The **←** / **→** buttons decrement/increment `budgetIdx` and call `renderBudgetMonth()`. The prev button is disabled at `budgetIdx === 0`; the next button is disabled at `budgetIdx === budgetMonths.length - 1`. `budgetMonths` and `budgetIdx` are module-level variables reset on each call to `renderBudget()`. Navigating away from Budget and back resets to the most recent month.
+`#budget-preset-btn` is a dropdown button showing the active preset label ("All Dates" by default). Clicking it opens `#budget-preset-menu` (a `<ul>` with `hidden` attribute). Clicking a preset item:
+1. Computes `{ from, to }` via `computePresetRange(preset)` using the current date.
+2. Sets `budgetDateFrom` / `budgetDateTo` (ISO strings or `null` for "All Dates").
+3. Updates the button label and shows/hides `#budget-date-display` ("From M/D/YYYY  to  M/D/YYYY").
+4. Calls `renderBudgetRange()` to re-filter and re-render.
 
-**Month heading:** `#budget-month-heading` is a large (22px bold) centered element set to e.g. "April 2025" at the top of the card. The smaller `#budget-month-label` inside the nav row is also kept for layout symmetry.
+`filterByDateRange(transactions, from, to)` is the core filter: returns transactions where `t.date >= from` (if from non-null) and `t.date <= to` (if to non-null). Both bounds are inclusive ISO date string comparisons. `computePresetRange(preset)` maps preset keys to `{ from, to }` pairs using `new Date()`:
+
+| Preset key | from | to |
+|---|---|---|
+| `'all'` | `null` | `null` |
+| `'this-month'` | `YYYY-MM-01` | last day of current month |
+| `'last-month'` | `YYYY-MM-01` | last day of previous month |
+| `'90-days'` | today − 89 days | today |
+| `'1-year'` | today − 1 year | today |
+| `'this-year'` | `YYYY-01-01` | `YYYY-12-31` |
+| `'last-year'` | `(Y-1)-01-01` | `(Y-1)-12-31` |
+
+The dropdown closes on any `document` click. `budgetPreset`, `budgetDateFrom`, `budgetDateTo` are module-level variables reset to `null` each time `renderBudget()` is called (i.e. when switching to the Budget tab).
 
 #### Transaction Search
 
-`#budget-search` sits above both panels and is always visible, including when the category drill-down is active. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, `String(amount)`, and the fix flag (`t.fix && 'fix'.includes(q)` — so queries "f", "fi", "fix" return fix-flagged transactions). An empty or whitespace-only query returns all transactions. When a search query is active, the bar chart, banner, and transaction list all update to reflect only the matching transactions. In the chart panel it filters all month transactions; in the detail panel it filters within the selected subcategory. The banner (month total, tx count) always reflects the currently visible filtered set.
+`#budget-search` sits above both panels and is always visible, including when the category drill-down is active. `filterBySearch(transactions, query)` matches case-insensitively against `description`, `category`, `String(amount)`, and the fix flag (`t.fix && 'fix'.includes(q)` — so queries "f", "fi", "fix" return fix-flagged transactions). An empty or whitespace-only query returns all transactions. When a search query is active, the bar chart, banner, and transaction list all update to reflect only the matching transactions. In the chart panel it filters all range transactions; in the detail panel it filters within the selected subcategory. The banner (total, tx count) always reflects the currently visible filtered set.
 
 #### Bar Chart
 
-`renderBudgetBars(txs)` accepts any transaction array and rebuilds `#budget-bars` from it — making it reusable for both full-month and search-filtered views. Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
+`renderBudgetBars(txs)` accepts any transaction array and rebuilds `#budget-bars` from it — making it reusable for both full-range and search-filtered views. Each subcategory with ≥1 transaction gets its own bar, labeled with the subcategory name and its parent category in muted text below. Bars are scaled relative to the largest absolute value (100% = max spend), sorted by `|total|` descending. Data comes from flattening `groups` across all parents: `CAT_LIST.flatMap(({parent, subs}) => subs.filter(sub => groups[parent]?.[sub]).map(...))`. Clicking a bar opens the detail panel.
 
 **Bar colors:**
 - `#43a047` (green) — negative total (expense / money leaving)
 - `#5c6bc0` (blue) — positive total (income / money received)
 
-#### Month Banner
+#### Banner
 
-`#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card and are written in `renderBudgetMonth()` from `grandTotal` (categorized spend, Transfer excluded) and `monthTx.length` (all transactions including uncategorized). They update on every month navigation and on every search query change.
+`#budget-month-total-banner` and `#budget-month-tx-count` live in the dark `.total-banner` above the card. The total shows `grandTotal` (categorized spend, Transfer excluded); the count shows the total transaction count in the current filtered set (including uncategorized and Transfers). Both update on every date range change and on every search query change.
 
 #### Transfer Exclusion
 
@@ -106,15 +122,19 @@ Transactions in the **Transfer** parent category (subcategory: "Credit Card Paym
 
 #### Full Transaction List
 
-`#budget-tx-tbody` is populated with all transactions for the month, sorted by date descending (newest first). Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
+`#budget-tx-tbody` is populated with all transactions in the active range, sorted by date descending (newest first), paginated 100 rows per page. Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
+
+#### Transaction Pagination
+
+When the transaction list or drill-down list exceeds 100 rows, `#budget-pagination` (or `#budget-detail-pagination`) becomes visible with Prev / Next buttons and a "Page X of Y" label. `renderPagination(prefix, page, totalPages)` handles visibility and disabled states. `budgetPage` and `budgetDetailPage` are module-level page indices, reset to 0 on range/search changes and when opening a drill-down.
 
 #### Category Drill-Down
 
-Transactions are filtered to `t.category === sub` (exact subcategory match), then further filtered by the search query via `filterBySearch()`, then sorted by date descending via `sortByDateDesc()`. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). When the user navigates months while the detail panel is open, `renderBudgetMonth()` re-renders the detail view for the same subcategory, so the drill-down persists across navigation. Pressing **← All Categories** clears `budgetSelectedSub` to `null`. Navigating away from Budget and back also resets it to `null`.
+Transactions are filtered to `t.category === sub` (exact subcategory match), then further filtered by the search query via `filterBySearch()`, then sorted by date descending via `sortByDateDesc()`, then paginated. The active subcategory is stored in `budgetSelectedSub` (module-level, `null` when in chart view). Pressing **← All Categories** clears `budgetSelectedSub` to `null`. Navigating away from Budget and back also resets it to `null`.
 
 #### Uncategorized Warning
 
-Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. If any uncategorized transactions exist in the current month, `#budget-warn` is shown with a yellow warning banner. Transfer-category transactions do not trigger this warning.
+Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. If any uncategorized transactions exist in the active range, `#budget-warn` is shown with a yellow warning banner. Transfer-category transactions do not trigger this warning.
 
 ---
 
@@ -132,6 +152,10 @@ Transactions without a category are excluded from `aggregateByCategory()` and fr
 #### CSV Import
 
 `state.catSession[]` holds the working rows for the current Categorize session. It is independent of `state.transactions`. `handleCatImport` sorts the session by date descending (`sortByDateDesc`) at population time so the most recent transactions appear first in the review table; all index-based mutations (category changes, keyboard navigation, bulk-select) operate on this sorted array directly. Rows with no category assigned are highlighted with `.cat-error` (red border on the select).
+
+#### Quoted Field Parsing
+
+`parseCSVLine` uses liberal quote parsing: if a field starts with a `"` it is read as a quoted field, but inner unescaped `"` characters that are not followed by `,` or end-of-line are treated as literal characters rather than closing the field. This handles real-world bank CSVs where field values like `"Payment for "991"; Conf# loc30o69b"` appear without proper escaping.
 
 #### Fix Flag
 
@@ -304,6 +328,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `filterByMonth` | `(transactions, year: number, month: number) → Transaction[]` | Filters to a calendar month. `month` is **1-based** (1=January, 12=December). |
+| `filterByDateRange` | `(transactions, from: string\|null, to: string\|null) → Transaction[]` | Filters by ISO date bounds, both inclusive. Either bound may be `null` (unbounded on that side). |
 | `filterBySearch` | `(transactions, query: string) → Transaction[]` | Case-insensitive match against `description`, `category`, `String(amount)`, and fix flag (`t.fix && 'fix'.includes(q)`). Returns all transactions when query is blank. |
 | `aggregateByCategory` | `(transactions, excludeParents?: string[]) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. Skips any parent listed in `excludeParents` (e.g. `['Transfer']`). |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |

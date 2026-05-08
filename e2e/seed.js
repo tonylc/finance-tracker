@@ -115,4 +115,14 @@ async function switchToBudget(page) {
   await page.click('[data-view="budget"]');
 }
 
-module.exports = { ACCOUNT, BANK_ACCOUNT, BANK_CSV, LOAD_CSV, CAT_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget };
+function buildCsv(n) {
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const month = String((i % 12) + 1).padStart(2, '0');
+    const day   = String((i % 28) + 1).padStart(2, '0');
+    rows.push(`2026-${month}-${day},Expense ${i + 1},-${(i + 1).toFixed(2)},Groceries,false`);
+  }
+  return rows.join('\n');
+}
+
+module.exports = { ACCOUNT, BANK_ACCOUNT, BANK_CSV, LOAD_CSV, CAT_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget, buildCsv };
