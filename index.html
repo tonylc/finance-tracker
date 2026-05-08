@@ -453,6 +453,7 @@
               <li data-preset="1-year">1 Year</li>
               <li data-preset="this-year">This Year</li>
               <li data-preset="last-year">Last Year</li>
+              <li data-preset="custom">Custom</li>
             </ul>
           </div>
           <span class="budget-range-label">From</span>
@@ -473,6 +474,11 @@
           <div id="budget-bars"></div>
           <div id="budget-tx-section" style="margin-top:16px;">
             <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Transactions</div>
+            <div id="budget-pagination-top" class="pagination-bar" style="display:none;">
+              <button id="budget-page-prev-top">&#8592; Prev</button>
+              <span id="budget-page-info-top">Page 1 of 1</span>
+              <button id="budget-page-next-top">Next &#8594;</button>
+            </div>
             <table class="budget-table">
               <thead>
                 <tr>
@@ -498,6 +504,11 @@
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
             <button id="budget-back-btn" class="btn-secondary">&#8592; All Categories</button>
             <span id="budget-detail-title" style="font-weight:700;font-size:15px;"></span>
+          </div>
+          <div id="budget-detail-pagination-top" class="pagination-bar" style="display:none;">
+            <button id="budget-detail-page-prev-top">&#8592; Prev</button>
+            <span id="budget-detail-page-info-top">Page 1 of 1</span>
+            <button id="budget-detail-page-next-top">Next &#8594;</button>
           </div>
           <table class="budget-table">
             <thead>
@@ -1209,12 +1220,15 @@ function computePresetRange(preset) {
 }
 
 function renderPagination(prefix, page, totalPages) {
-  const bar = document.getElementById(`${prefix}-pagination`);
-  if (totalPages <= 1) { bar.style.display = 'none'; return; }
-  bar.style.display = 'flex';
-  document.getElementById(`${prefix}-page-prev`).disabled = page === 0;
-  document.getElementById(`${prefix}-page-next`).disabled = page === totalPages - 1;
-  document.getElementById(`${prefix}-page-info`).textContent = `Page ${page + 1} of ${totalPages}`;
+  ['', '-top'].forEach(suffix => {
+    const bar = document.getElementById(`${prefix}-pagination${suffix}`);
+    if (!bar) return;
+    if (totalPages <= 1) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    document.getElementById(`${prefix}-page-prev${suffix}`).disabled = page === 0;
+    document.getElementById(`${prefix}-page-next${suffix}`).disabled = page === totalPages - 1;
+    document.getElementById(`${prefix}-page-info${suffix}`).textContent = `Page ${page + 1} of ${totalPages}`;
+  });
 }
 
 document.getElementById('budget-preset-btn').addEventListener('click', e => {
@@ -1228,19 +1242,27 @@ document.getElementById('budget-preset-btn').addEventListener('click', e => {
 document.querySelectorAll('#budget-preset-menu li').forEach(li => {
   li.addEventListener('click', () => {
     const preset = li.dataset.preset;
-    budgetPreset = preset === 'all' ? null : preset;
-    const { from, to } = computePresetRange(budgetPreset || 'all');
-    budgetDateFrom = from;
-    budgetDateTo   = to;
 
     document.getElementById('budget-preset-btn-text').textContent = li.textContent;
     document.getElementById('budget-preset-menu').hidden = true;
     document.getElementById('budget-preset-arrow').textContent = '▼';
-    document.getElementById('budget-preset-btn').classList.toggle('no-filter', !budgetPreset);
-
     document.querySelectorAll('#budget-preset-menu li').forEach(l => l.classList.remove('selected'));
     li.classList.add('selected');
 
+    if (preset === 'custom') {
+      document.getElementById('budget-preset-btn').classList.remove('no-filter');
+      document.getElementById('budget-from-input').value = '';
+      document.getElementById('budget-to-input').value = '';
+      budgetDateFrom = null; budgetDateTo = null;
+      document.getElementById('budget-from-input').focus();
+      return;
+    }
+
+    budgetPreset = preset === 'all' ? null : preset;
+    const { from, to } = computePresetRange(budgetPreset || 'all');
+    budgetDateFrom = from;
+    budgetDateTo   = to;
+    document.getElementById('budget-preset-btn').classList.toggle('no-filter', !budgetPreset);
     document.getElementById('budget-from-input').value = from || '';
     document.getElementById('budget-to-input').value = to || '';
     renderBudgetRange();
@@ -1256,7 +1278,7 @@ document.addEventListener('click', () => {
 });
 
 ['budget-from-input', 'budget-to-input'].forEach(id => {
-  document.getElementById(id).addEventListener('change', () => {
+  document.getElementById(id).addEventListener('input', () => {
     budgetDateFrom = document.getElementById('budget-from-input').value || null;
     budgetDateTo   = document.getElementById('budget-to-input').value   || null;
     const hasFilter = budgetDateFrom || budgetDateTo;
@@ -1274,17 +1296,25 @@ document.getElementById('budget-search').addEventListener('input', () => {
 document.getElementById('budget-back-btn').addEventListener('click', () => {
   budgetSelectedSub = null; budgetDetailPage = 0; renderActiveBudgetPanel();
 });
-document.getElementById('budget-page-prev').addEventListener('click', () => {
-  if (budgetPage > 0) { budgetPage--; renderActiveBudgetPanel(); }
+['budget-page-prev', 'budget-page-prev-top'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    if (budgetPage > 0) { budgetPage--; renderActiveBudgetPanel(); }
+  });
 });
-document.getElementById('budget-page-next').addEventListener('click', () => {
-  budgetPage++; renderActiveBudgetPanel();
+['budget-page-next', 'budget-page-next-top'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    budgetPage++; renderActiveBudgetPanel();
+  });
 });
-document.getElementById('budget-detail-page-prev').addEventListener('click', () => {
-  if (budgetDetailPage > 0) { budgetDetailPage--; renderActiveBudgetPanel(); }
+['budget-detail-page-prev', 'budget-detail-page-prev-top'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    if (budgetDetailPage > 0) { budgetDetailPage--; renderActiveBudgetPanel(); }
+  });
 });
-document.getElementById('budget-detail-page-next').addEventListener('click', () => {
-  budgetDetailPage++; renderActiveBudgetPanel();
+['budget-detail-page-next', 'budget-detail-page-next-top'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    budgetDetailPage++; renderActiveBudgetPanel();
+  });
 });
 
 function renderBudget() {
