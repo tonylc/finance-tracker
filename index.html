@@ -188,16 +188,16 @@
   .budget-preset-menu li { padding: 10px 16px; cursor: pointer; font-size: 14px; }
   .budget-preset-menu li:hover { background: #f5f5f5; }
   .budget-preset-menu li.selected { font-weight: 700; }
-  .budget-date-display {
+  .budget-date-input {
     font-size: 13px;
-    color: #555;
+    color: #333;
     border: 1px solid #ddd;
     border-radius: 4px;
-    padding: 6px 12px;
+    padding: 5px 8px;
     background: #fafafa;
-    flex: 1;
-    white-space: nowrap;
+    cursor: pointer;
   }
+  .budget-date-input:focus { outline: none; border-color: #1565c0; }
   .pagination-bar {
     display: flex;
     align-items: center;
@@ -455,7 +455,10 @@
               <li data-preset="last-year">Last Year</li>
             </ul>
           </div>
-          <div id="budget-date-display" class="budget-date-display" style="display:none;"></div>
+          <span class="budget-range-label">From</span>
+          <input type="date" id="budget-from-input" class="budget-date-input">
+          <span class="budget-range-label">to</span>
+          <input type="date" id="budget-to-input" class="budget-date-input">
         </div>
 
         <div id="budget-warn" style="display:none;"></div>
@@ -1205,11 +1208,6 @@ function computePresetRange(preset) {
   return { from: null, to: null };
 }
 
-function fmtDisplayDate(iso) {
-  const [y, mo, d] = iso.split('-');
-  return `${parseInt(mo)}/${parseInt(d)}/${y}`;
-}
-
 function renderPagination(prefix, page, totalPages) {
   const bar = document.getElementById(`${prefix}-pagination`);
   if (totalPages <= 1) { bar.style.display = 'none'; return; }
@@ -1243,13 +1241,8 @@ document.querySelectorAll('#budget-preset-menu li').forEach(li => {
     document.querySelectorAll('#budget-preset-menu li').forEach(l => l.classList.remove('selected'));
     li.classList.add('selected');
 
-    const display = document.getElementById('budget-date-display');
-    if (from && to) {
-      display.textContent = `From ${fmtDisplayDate(from)}  to  ${fmtDisplayDate(to)}`;
-      display.style.display = 'block';
-    } else {
-      display.style.display = 'none';
-    }
+    document.getElementById('budget-from-input').value = from || '';
+    document.getElementById('budget-to-input').value = to || '';
     renderBudgetRange();
   });
 });
@@ -1260,6 +1253,19 @@ document.addEventListener('click', () => {
     menu.hidden = true;
     document.getElementById('budget-preset-arrow').textContent = '▼';
   }
+});
+
+['budget-from-input', 'budget-to-input'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    budgetDateFrom = document.getElementById('budget-from-input').value || null;
+    budgetDateTo   = document.getElementById('budget-to-input').value   || null;
+    const hasFilter = budgetDateFrom || budgetDateTo;
+    document.getElementById('budget-preset-btn-text').textContent = hasFilter ? 'Custom' : 'All Dates';
+    document.getElementById('budget-preset-btn').classList.toggle('no-filter', !hasFilter);
+    document.querySelectorAll('#budget-preset-menu li').forEach(l => l.classList.remove('selected'));
+    if (!hasFilter) document.querySelector('#budget-preset-menu li[data-preset="all"]').classList.add('selected');
+    renderBudgetRange();
+  });
 });
 
 document.getElementById('budget-search').addEventListener('input', () => {
@@ -1292,7 +1298,8 @@ function renderBudget() {
   document.getElementById('budget-preset-btn').classList.add('no-filter');
   document.querySelectorAll('#budget-preset-menu li').forEach(l => l.classList.remove('selected'));
   document.querySelector('#budget-preset-menu li[data-preset="all"]').classList.add('selected');
-  document.getElementById('budget-date-display').style.display = 'none';
+  document.getElementById('budget-from-input').value = '';
+  document.getElementById('budget-to-input').value = '';
   renderBudgetRange();
 }
 
