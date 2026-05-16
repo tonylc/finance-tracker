@@ -23,7 +23,7 @@ Finance Tracker is a zero-server personal finance tool that runs entirely in the
 - Real-time bank connectivity (Plaid/OFX integrations).
 - Budgeting targets or alerts.
 - Multi-user or sync across devices.
-- Persistence of transactions across page reloads (by design — session-only).
+- Persistence of transactions across page reloads.
 
 ---
 
@@ -58,6 +58,12 @@ Uncategorized transactions are allowed in the Load view. After import, if any tr
 #### Per-Account Export
 
 Each account chip in the summary includes an **Export** button. Clicking it calls `handleLoadExport(accountKey)`, which filters `state.transactions` to that account, sorts ascending with `sortByDateAsc()`, serializes with `toCSV()`, and displays the result in `#load-export-card` below the summary. A **Copy** button copies the textarea to clipboard.
+
+#### Transaction Persistence
+
+Transactions are persisted to `localStorage` key `'financeTrackerTx'` as a JSON array immediately after every import (`handleLoadImport()` calls `saveTransactions()`). On page load, `loadPersistedTransactions()` reads this key, restores `state.transactions`, and reconstructs `state.accounts` from the unique `accountKey` values present in the restored array (chip display only needs `a.key`). If data exists, `renderLoadSummary()` is called, so `#load-summary` appears populated before any new import.
+
+Each account chip also has a **Clear** button (`.chip-clear-btn`) that calls `handleClearAccount(key)`. This filters both `state.transactions` and `state.accounts` to remove all entries for that account, calls `saveTransactions()` to update localStorage, then either hides `#load-summary` (if no transactions remain) or re-renders it.
 
 ---
 
@@ -135,6 +141,14 @@ Transactions are filtered to `t.category === sub` (exact subcategory match), the
 #### Uncategorized Warning
 
 Transactions without a category are excluded from `aggregateByCategory()` and from the grand total. If any uncategorized transactions exist in the active range, `#budget-warn` is shown with a yellow warning banner. Transfer-category transactions do not trigger this warning.
+
+#### Month Navigation
+
+When `budgetPreset` is `'this-month'` or `'last-month'`, pressing ← / → arrow keys navigates months. Left shifts one month earlier; right advances one month, capped at the current calendar month. `budgetMonthOffset` (module-level integer, reset to 0 in `renderBudget()` and on every preset selection) tracks the offset from the preset's natural month (0 = the preset's own month, negative = earlier).
+
+`computeMonthRange(preset, offset)` returns `{ from, to, label }`. `applyMonthNav()` applies the range to `budgetDateFrom`/`budgetDateTo`, updates the date inputs and preset button text (e.g. "May 2026"), and calls `renderBudgetRange()`. When 'this-month' or 'last-month' is selected from the dropdown, `applyMonthNav()` runs immediately so the button always shows the month name. Arrow keys are suppressed when any input/select/textarea has focus.
+
+Max offsets: `'this-month'` → 0 (cannot advance past current month); `'last-month'` → 1 (can advance to current month, no further).
 
 ---
 
@@ -291,8 +305,8 @@ Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The v
 
 ```javascript
 const state = {
-  transactions: [],       // All loaded transactions (session-only, not persisted)
-  accounts:     [],       // { key, name, last4 } — populated on load, session-only
+  transactions: [],       // All loaded transactions; persisted to localStorage key 'financeTrackerTx'
+  accounts:     [],       // { key } — reconstructed from persisted transactions on page load
   catSession:   [],       // Working rows in Categorize view
   userConfig:   {
     accounts: [],         // Array of Account Profile objects (persisted to localStorage)

@@ -742,6 +742,29 @@ function saveConfig() {
   localStorage.setItem('financeTrackerConfig', JSON.stringify(state.userConfig));
 }
 
+function saveTransactions() {
+  localStorage.setItem('financeTrackerTx', JSON.stringify(state.transactions));
+}
+
+function loadPersistedTransactions() {
+  try {
+    const raw = localStorage.getItem('financeTrackerTx');
+    if (!raw) return;
+    const txs = JSON.parse(raw);
+    if (!Array.isArray(txs) || txs.length === 0) return;
+    state.transactions = txs;
+    const seen = new Set();
+    state.accounts = [];
+    txs.forEach(t => {
+      if (t.accountKey && !seen.has(t.accountKey)) {
+        seen.add(t.accountKey);
+        state.accounts.push({ key: t.accountKey });
+      }
+    });
+    renderLoadSummary();
+  } catch (_) {}
+}
+
 // ══════════════════════════════════════════════════
 //  PURE UTILITY FUNCTIONS (also used by tests)
 // ══════════════════════════════════════════════════
@@ -1112,6 +1135,7 @@ function handleLoadImport() {
     state.accounts.push({ key: accountKey, name: account.name, last4: account.last4 });
   }
 
+  saveTransactions();
   document.getElementById('load-csv').value = '';
   renderLoadSummary();
   showLoadSuccess(`Loaded ${incoming.length} rows for <strong>${accountKey}</strong>.`);
@@ -1142,8 +1166,9 @@ function renderLoadSummary() {
     const count = state.transactions.filter(t => t.accountKey === a.key).length;
     const chip = document.createElement('div');
     chip.className = 'account-chip';
-    chip.innerHTML = `${a.key} <span>${count}</span> <button class="btn btn-sm btn-secondary chip-export-btn">Export</button>`;
+    chip.innerHTML = `${a.key} <span>${count}</span> <button class="btn btn-sm btn-secondary chip-export-btn">Export</button> <button class="btn btn-sm btn-danger chip-clear-btn">Clear</button>`;
     chip.querySelector('.chip-export-btn').addEventListener('click', () => handleLoadExport(a.key));
+    chip.querySelector('.chip-clear-btn').addEventListener('click', () => handleClearAccount(a.key));
     list.appendChild(chip);
   });
 
@@ -1167,6 +1192,17 @@ function handleLoadExport(accountKey) {
   card.scrollIntoView({ behavior: 'smooth' });
 }
 
+function handleClearAccount(key) {
+  state.transactions = state.transactions.filter(t => t.accountKey !== key);
+  state.accounts = state.accounts.filter(a => a.key !== key);
+  saveTransactions();
+  if (state.transactions.length === 0) {
+    document.getElementById('load-summary').style.display = 'none';
+  } else {
+    renderLoadSummary();
+  }
+}
+
 document.getElementById('load-copy-btn').addEventListener('click', () => {
   const ta = document.getElementById('load-export-output');
   ta.select();
@@ -1176,12 +1212,13 @@ document.getElementById('load-copy-btn').addEventListener('click', () => {
 // ══════════════════════════════════════════════════
 //  BUDGET VIEW
 // ══════════════════════════════════════════════════
-let budgetPreset    = null;
-let budgetDateFrom  = null;
-let budgetDateTo    = null;
-let budgetPage      = 0;
-let budgetDetailPage = 0;
-let currentBudgetTx = [];
+let budgetPreset      = null;
+let budgetDateFrom    = null;
+let budgetDateTo      = null;
+let budgetMonthOffset = 0;
+let budgetPage        = 0;
+let budgetDetailPage  = 0;
+let currentBudgetTx   = [];
 let budgetSelectedSub = null; // null = chart panel; string = active detail sub
 let selectedIdxs = new Set();
 let multiSelectMode = false;
@@ -1217,6 +1254,27 @@ function computePresetRange(preset) {
   if (preset === 'this-year') return { from: `${y}-01-01`, to: `${y}-12-31` };
   if (preset === 'last-year') return { from: `${y-1}-01-01`, to: `${y-1}-12-31` };
   return { from: null, to: null };
+}
+
+function computeMonthRange(preset, offset) {
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth(); // 0-based
+  if (preset === 'last-month') m -= 1;
+  m += offset;
+  y += Math.floor(m / 12);
+  m = ((m % 12) + 12) % 12;
+  const from = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  const to = new Date(y, m + 1, 0).toISOString().slice(0, 10);
+  return { from, to, label: `${MONTH_NAMES[m]} ${y}` };
+}
+
+function applyMonthNav() {
+  const { from, to, label } = computeMonthRange(budgetPreset, budgetMonthOffset);
+  budgetDateFrom = from; budgetDateTo = to;
+  document.getElementById('budget-from-input').value = from;
+  document.getElementById('budget-to-input').value = to;
+  document.getElementById('budget-preset-btn-text').textContent = label;
+  renderBudgetRange();
 }
 
 function renderPagination(prefix, page, totalPages) {
@@ -1259,13 +1317,18 @@ document.querySelectorAll('#budget-preset-menu li').forEach(li => {
     }
 
     budgetPreset = preset === 'all' ? null : preset;
-    const { from, to } = computePresetRange(budgetPreset || 'all');
-    budgetDateFrom = from;
-    budgetDateTo   = to;
+    budgetMonthOffset = 0;
     document.getElementById('budget-preset-btn').classList.toggle('no-filter', !budgetPreset);
-    document.getElementById('budget-from-input').value = from || '';
-    document.getElementById('budget-to-input').value = to || '';
-    renderBudgetRange();
+    if (budgetPreset === 'this-month' || budgetPreset === 'last-month') {
+      applyMonthNav();
+    } else {
+      const { from, to } = computePresetRange(budgetPreset || 'all');
+      budgetDateFrom = from;
+      budgetDateTo   = to;
+      document.getElementById('budget-from-input').value = from || '';
+      document.getElementById('budget-to-input').value = to || '';
+      renderBudgetRange();
+    }
   });
 });
 
@@ -1322,7 +1385,7 @@ function renderBudget() {
   document.getElementById('budget-empty').style.display = hasData ? 'none' : 'block';
   document.getElementById('budget-content').style.display = hasData ? 'block' : 'none';
   if (!hasData) return;
-  budgetPreset = null; budgetDateFrom = null; budgetDateTo = null;
+  budgetPreset = null; budgetDateFrom = null; budgetDateTo = null; budgetMonthOffset = 0;
   budgetPage = 0; budgetDetailPage = 0; budgetSelectedSub = null;
   document.getElementById('budget-preset-btn-text').textContent = 'All Dates';
   document.getElementById('budget-preset-btn').classList.add('no-filter');
@@ -1734,6 +1797,16 @@ function setCatFocus(idx) {
 }
 
 document.addEventListener('keydown', e => {
+  if (currentView === 'budget' && (budgetPreset === 'this-month' || budgetPreset === 'last-month')) {
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+    const maxOffset = budgetPreset === 'this-month' ? 0 : 1;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault(); budgetMonthOffset--; applyMonthNav();
+    } else if (e.key === 'ArrowRight' && budgetMonthOffset < maxOffset) {
+      e.preventDefault(); budgetMonthOffset++; applyMonthNav();
+    }
+    return;
+  }
   if (currentView !== 'categorize') return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -2023,6 +2096,7 @@ function populateAccountDropdowns() {
 //  INIT
 // ══════════════════════════════════════════════════
 loadConfig();
+loadPersistedTransactions();
 populateAccountDropdowns();
 
 // ══════════════════════════════════════════════════

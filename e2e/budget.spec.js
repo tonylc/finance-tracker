@@ -256,3 +256,34 @@ test.describe('Uncategorized Warning', () => {
     await expect(page.locator('#budget-warn')).toContainText('no category');
   });
 });
+
+test.describe('Month Navigation', () => {
+  test('given This Month preset, ArrowLeft shifts range to previous month', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await loadTransactions(page, LOAD_CSV.categorized);
+    await switchToBudget(page);
+    await page.click('#budget-preset-btn');
+    await page.click('#budget-preset-menu li[data-preset="this-month"]');
+    const fromBefore = await page.locator('#budget-from-input').inputValue();
+    await page.locator('#budget-content').click();
+    await page.keyboard.press('ArrowLeft');
+    const fromAfter = await page.locator('#budget-from-input').inputValue();
+    expect(fromAfter).not.toBe(fromBefore);
+    expect(fromAfter < fromBefore).toBe(true);
+  });
+
+  test('given current month displayed, ArrowRight does not advance past current month', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await loadTransactions(page, LOAD_CSV.categorized);
+    await switchToBudget(page);
+    await page.click('#budget-preset-btn');
+    await page.click('#budget-preset-menu li[data-preset="this-month"]');
+    const fromBefore = await page.locator('#budget-from-input').inputValue();
+    await page.locator('#budget-content').click();
+    await page.keyboard.press('ArrowRight');
+    const fromAfter = await page.locator('#budget-from-input').inputValue();
+    expect(fromAfter).toBe(fromBefore);
+  });
+});

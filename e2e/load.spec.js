@@ -87,3 +87,25 @@ test.describe('Per-Account Export', () => {
     expect(header).toBe('Date,Description,Amount,Category,Fix');
   });
 });
+
+test.describe('Transaction Persistence', () => {
+  test('transactions survive a page reload', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await loadTransactions(page, LOAD_CSV.categorized);
+    await page.reload();
+    await page.click('[data-view="load"]');
+    await expect(page.locator('#load-summary')).toBeVisible();
+    await expect(page.locator('#total-tx-count')).toHaveText('3');
+  });
+
+  test('clearing an account removes its transactions and hides summary when empty', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await loadTransactions(page, LOAD_CSV.categorized);
+    await page.locator('.chip-clear-btn').first().click();
+    await page.reload();
+    await page.click('[data-view="load"]');
+    await expect(page.locator('#load-summary')).toBeHidden();
+  });
+});
