@@ -877,14 +877,18 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
     inputCsvFormat.forEach((field, i) => {
       if (field === 'debit_amount') map.debitAmount = i;
       else if (field === 'credit_amount') map.creditAmount = i;
+      else if (field === '-amount') { map.amount = i; map.invertAmount = true; }
       else if (field) map[field] = i;
     });
-    const dateCt = inputCsvFormat.filter(f => f === 'date').length;
-    const descCt = inputCsvFormat.filter(f => f === 'description').length;
-    const amtCt  = inputCsvFormat.filter(f => f === 'amount').length;
-    if (dateCt > 1) return { error: 'date may only appear once' };
-    if (descCt > 1) return { error: 'description may only appear once' };
-    if (amtCt  > 1) return { error: 'amount may only appear once' };
+    const dateCt   = inputCsvFormat.filter(f => f === 'date').length;
+    const descCt   = inputCsvFormat.filter(f => f === 'description').length;
+    const amtCt    = inputCsvFormat.filter(f => f === 'amount').length;
+    const negAmtCt = inputCsvFormat.filter(f => f === '-amount').length;
+    if (dateCt > 1)   return { error: 'date may only appear once' };
+    if (descCt > 1)   return { error: 'description may only appear once' };
+    if (amtCt  > 1)   return { error: 'amount may only appear once' };
+    if (negAmtCt > 1) return { error: 'amount may only appear once' };
+    if (amtCt > 0 && negAmtCt > 0) return { error: 'amount and -amount cannot both be specified' };
   } else {
     // Fallback: match by lowercase header name (preserves existing behaviour)
     headerRow.forEach((h, i) => {
@@ -938,7 +942,8 @@ function parseTransaction(fields, headerMap, accountKey) {
         return 0;
       }
       const raw = (fields[headerMap.amount] || '').trim();
-      return parseFloat(raw.replace(/[$,]/g, '')) || 0;
+      const val = parseFloat(raw.replace(/[$,]/g, '')) || 0;
+      return headerMap.invertAmount ? -val : val;
     })(),
     category: cat,
     fix: fixRaw === 'true' || fixRaw === '1' || fixRaw === 'yes',
@@ -1121,7 +1126,10 @@ function handleLoadImport() {
   const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
   if (dataRows.length < 1) return showLoadError('CSV must have at least one data row.');
 
-  const validation = validateImport(dataRows, LOAD_HEADER_MAP, true);
+  const invertAmount = Array.isArray(account.inputCsvFormat) && account.inputCsvFormat.includes('-amount');
+  const loadHeaderMap = invertAmount ? { ...LOAD_HEADER_MAP, invertAmount: true } : LOAD_HEADER_MAP;
+
+  const validation = validateImport(dataRows, loadHeaderMap, true);
   if (!validation.valid) {
     showLoadError(`Import rejected — fix the following errors before loading:<ul style="margin-top:6px;padding-left:18px;">${
       validation.errors.map(e => `<li>${e}</li>`).join('')
@@ -1130,7 +1138,7 @@ function handleLoadImport() {
   }
 
   const accountKey = formatAccountKey(account.name, account.last4);
-  const incoming = dataRows.map(fields => parseTransaction(fields, LOAD_HEADER_MAP, accountKey));
+  const incoming = dataRows.map(fields => parseTransaction(fields, loadHeaderMap, accountKey));
   state.transactions = deduplicateTransactions(state.transactions, incoming);
 
   if (!state.accounts.find(a => a.key === accountKey)) {

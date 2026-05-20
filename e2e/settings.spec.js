@@ -179,6 +179,31 @@ test.describe('Import Settings', () => {
 
 });
 
+test.describe('Amount Sign Inversion', () => {
+  test('account with -amount format: positive CSV amounts are stored as negative and budget totals correctly', async ({ page }) => {
+    await page.goto('index.html');
+    // Create an account with -amount format
+    await page.click('[data-view="settings"]');
+    await page.click('#settings-add-btn');
+    await page.fill('#sf-name', 'My Bank');
+    await page.fill('#sf-last4', '7777');
+    await page.fill('#sf-format-input', '["date","description","-amount","category","fix"]');
+    await page.click('#sf-save-btn');
+    await expect(page.locator('#settings-form-card')).toBeHidden();
+
+    // Import CSV with positive amounts via Load view
+    await page.click('[data-view="load"]');
+    await page.selectOption('#load-acct-profile', { label: 'My Bank *7777' });
+    const csv = '2024-03-01,Coffee,5.00,Coffee / Bakery,false\n2024-03-15,Groceries,20.00,Groceries,false';
+    await page.fill('#load-csv', csv);
+    await page.click('#load-import-btn');
+
+    // Budget totals should be negative (amounts were inverted)
+    await page.click('[data-view="budget"]');
+    await expect(page.locator('#budget-month-total-banner')).toHaveText('-$25.00');
+  });
+});
+
 test.describe('Account Type', () => {
   test('type:bank saved as Bank Account appears in settings table', async ({ page }) => {
     await saveAccountWithType(page, {

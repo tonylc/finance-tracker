@@ -574,6 +574,22 @@ function runTests() {
       assert(m.error);
       assert(m.error.includes('amount'));
     });
+
+    test('given -amount in format, sets amount index and invertAmount true', () => {
+      const m = buildHeaderMap(null, ['date', 'description', '-amount']);
+      assertEqual(m.amount, 2);
+      assertEqual(m.invertAmount, true);
+    });
+
+    test('given both amount and -amount in format, returns error', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'amount', '-amount']);
+      assert(typeof m.error === 'string');
+    });
+
+    test('given -amount with debit_amount and credit_amount, returns error', () => {
+      const m = buildHeaderMap(null, ['date', 'description', '-amount', 'debit_amount', 'credit_amount']);
+      assert(typeof m.error === 'string');
+    });
   });
 
   // ── validateImport ────────────────────────────────────────────────────────
@@ -731,6 +747,26 @@ function runTests() {
       const splitHdr = buildHeaderMap(null, ['date', 'description', 'debit_amount', 'credit_amount']);
       const t = parseTransaction(['2025-01-01', 'Refund', '', '-10.00'], splitHdr, 'Chase *1234');
       assertEqual(t.amount, 10);
+    });
+
+    test('given invertAmount headerMap, positive CSV amount is stored as negative', () => {
+      const hm = { date: 0, description: 1, amount: 2, category: -1, fix: -1, invertAmount: true };
+      const t = parseTransaction(['2024-01-01', 'Test', '50.00', '', ''], hm, 'Chase *1234');
+      assertEqual(t.amount, -50);
+    });
+
+    test('given invertAmount headerMap, negative CSV amount is stored as positive', () => {
+      const hm = { date: 0, description: 1, amount: 2, category: -1, fix: -1, invertAmount: true };
+      const t = parseTransaction(['2024-01-01', 'Test', '-30.00', '', ''], hm, 'Chase *1234');
+      assertEqual(t.amount, 30);
+    });
+
+    test('given no invertAmount flag, positive and negative amounts are stored unchanged', () => {
+      const hm = { date: 0, description: 1, amount: 2, category: -1, fix: -1 };
+      const pos = parseTransaction(['2024-01-01', 'Deposit', '100.00', '', ''], hm, 'Chase *1234');
+      const neg = parseTransaction(['2024-01-01', 'Spend', '-45.00', '', ''], hm, 'Chase *1234');
+      assertEqual(pos.amount, 100);
+      assertEqual(neg.amount, -45);
     });
   });
 

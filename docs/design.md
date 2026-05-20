@@ -255,7 +255,7 @@ Clicking **Edit** on an existing account row pre-fills the form with the account
 
 #### Column Format Validation
 
-`#sf-format-input` must contain a valid JSON array. On **Save Account**, the value is parsed and passed to `buildHeaderMap(null, inputCsvFormat)`. If parsing fails or `buildHeaderMap` returns an error, `#sf-form-error` is shown and the save is blocked. Allowed field values: `"date"`, `"description"`, `"amount"`, `"debit_amount"`, `"credit_amount"`, `"category"`, `"fix"`, `null` (skip). `category` and `fix` are optional; `category` values must be subcategory names (e.g. `"Groceries"`), not parent names (e.g. `"Food"`) — invalid values are rejected by `validateImport`. Constraints enforced by `buildHeaderMap`: `date`, `description`, and `amount` may each appear at most once — duplicates are rejected with an error. `date` and `description` are required. Either `amount` appears exactly once, or both `debit_amount` and `credit_amount` appear together — mixing `amount` with the split pair is rejected, as is providing only one of the split pair.
+`#sf-format-input` must contain a valid JSON array. On **Save Account**, the value is parsed and passed to `buildHeaderMap(null, inputCsvFormat)`. If parsing fails or `buildHeaderMap` returns an error, `#sf-form-error` is shown and the save is blocked. Allowed field values: `"date"`, `"description"`, `"amount"`, `"-amount"`, `"debit_amount"`, `"credit_amount"`, `"category"`, `"fix"`, `null` (skip). `category` and `fix` are optional; `category` values must be subcategory names (e.g. `"Groceries"`), not parent names (e.g. `"Food"`) — invalid values are rejected by `validateImport`. Constraints enforced by `buildHeaderMap`: `date`, `description`, and `amount`/`-amount` may each appear at most once — duplicates are rejected with an error. `date` and `description` are required. Either `amount` or `"-amount"` appears exactly once, or both `debit_amount` and `credit_amount` appear together — mixing `amount`/`"-amount"` with the split pair is rejected, as is providing only one of the split pair. `"-amount"` and `"amount"` cannot both be present.
 
 #### Last 4 Validation
 
@@ -276,6 +276,14 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
 #### Account Type
 
 Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The value is chosen from a dropdown (`#sf-type`) in the Add/Edit form and persisted with the profile. The settings table displays `"Credit Card"` or `"Bank Account"` accordingly. Missing `type` values are treated as `"credit"` everywhere.
+
+#### Amount Sign Inversion
+
+When an account's `inputCsvFormat` contains `"-amount"`, every imported amount is negated: a CSV value of `50.00` is stored as `−50`, and `−30.00` is stored as `30`. This corrects for bank accounts that export spending as positive numbers (the inverse of the app's convention where negative = spend).
+
+In the **Categorize view**, `buildHeaderMap(rows[0], account.inputCsvFormat)` picks up `"-amount"` and sets `map.invertAmount = true`; `parseTransaction()` then negates the value automatically.
+
+In the **Load view**, `handleLoadImport()` checks `account.inputCsvFormat.includes('-amount')` and, if true, builds `{ ...LOAD_HEADER_MAP, invertAmount: true }` before calling `parseTransaction()`.
 
 ---
 
@@ -303,7 +311,7 @@ Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The v
   name:           string,   // e.g. "Chase Checking"
   last4:          string,   // 4-digit string
   type:           string,   // "credit" (default) or "bank"
-  inputCsvFormat: Array,    // e.g. ["date", null, "description", "amount"] or ["date", "description", "debit_amount", "credit_amount"]
+  inputCsvFormat: Array,    // e.g. ["date", "description", "amount"] or ["date", "description", "-amount"] or ["date", "description", "debit_amount", "credit_amount"]
 }
 ```
 
@@ -338,9 +346,9 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | Function | Signature | Description |
 |---|---|---|
 | `formatAccountKey` | `(name, last4) → string` | Returns `"Name *last4"`. |
-| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount?, debitAmount?, creditAmount?, category, fix }` where `category` and `fix` default to `-1` if absent. `debitAmount` and `creditAmount` are set when the split-column pair is used instead of `amount`. Returns `{ error }` if required columns are missing, if `date`/`description`/`amount` appears more than once, if only one of `debit_amount`/`credit_amount` is present, or if `amount` is mixed with the split pair. |
+| `buildHeaderMap` | `(headerRow: string[], inputCsvFormat?: string[]) → HeaderMap \| { error }` | Maps field names to column indices. Uses positional `inputCsvFormat` if provided; otherwise matches lowercase header names. Returns `{ date, description, amount?, invertAmount?, debitAmount?, creditAmount?, category, fix }` where `category` and `fix` default to `-1` if absent. `debitAmount` and `creditAmount` are set when the split-column pair is used instead of `amount`. `invertAmount: true` is set when `"-amount"` is used instead of `"amount"`. Returns `{ error }` if required columns are missing, if `date`/`description`/`amount` appears more than once, if `"-amount"` and `"amount"` both appear, if `"-amount"` is used alongside the split pair, if only one of `debit_amount`/`credit_amount` is present, or if `amount` is mixed with the split pair. |
 | `validateImport` | `(rows: string[][], headerMap, requireCategory?) → { valid, errors }` | Validates each row: parseable date, non-blank description, finite amount. For split maps (`headerMap.debitAmount !== undefined`), exactly one of `debitAmount`/`creditAmount` columns must be non-blank per row — both-blank → `'amount is blank'`, both-filled → `'amount is ambiguous (both debit and credit columns have values)'`. Optionally checks category. Returns error strings with 1-based row numbers. |
-| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. For split maps: reads `debitAmount` column → stored as `−|value|`; reads `creditAmount` column → stored as `+|value|` (absolute value enforced for both). For single `amount` maps: parses as-is. Strips `$` and commas. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
+| `parseTransaction` | `(fields: string[], headerMap, accountKey) → Transaction` | Extracts and coerces fields into a Transaction object. For split maps: reads `debitAmount` column → stored as `−|value|`; reads `creditAmount` column → stored as `+|value|` (absolute value enforced for both). For single `amount` maps: parses the value and applies sign. If `headerMap.invertAmount` is `true`, the value is negated (`-val`); otherwise it is stored as-is. Strips `$` and commas. Assigns UUID. Normalizes date to ISO `YYYY-MM-DD`: accepts YYYY-M-D, YYYY/M/D, YYYY/MM/DD (ISO-order) and M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (US financial export order). |
 | `deduplicateTransactions` | `(existing: Transaction[], incoming: Transaction[]) → Transaction[]` | Merges arrays; skips incoming entries that match an existing `accountKey|date|description|amount` key. |
 
 ### Filtering & Aggregation
