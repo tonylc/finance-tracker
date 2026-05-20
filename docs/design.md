@@ -150,6 +150,12 @@ When `budgetPreset` is `'this-month'` or `'last-month'`, pressing ← / → arro
 
 Max offsets: `'this-month'` → 0 (cannot advance past current month); `'last-month'` → 1 (can advance to current month, no further).
 
+#### Account Filter
+
+A row of toggle chips (`#budget-account-filter`) appears between the date range row and the search bar when two or more distinct account keys are present in `state.transactions`. Each chip shows the full account key (e.g. `"Chase *1234"`). All chips are active (indigo background, white text) by default; clicking a chip deactivates it (gray, strikethrough) and removes its account key from `budgetAccountFilter`. Clicking again re-adds it.
+
+`budgetAccountFilter` is a module-level `Set<string>` of active account keys, initialized from `state.transactions` in `renderBudget()` and reset on every tab switch. `renderBudgetRange()` applies `filterByAccount(dateFiltered, budgetAccountFilter)` after the date range filter. Chips are re-rendered by `renderAccountFilterChips()` on every toggle. When fewer than two distinct account keys exist in `state.transactions`, `#budget-account-filter` is hidden and filtering is not applied.
+
 ---
 
 ### 2.3 Categorize
@@ -343,6 +349,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 |---|---|---|
 | `filterByMonth` | `(transactions, year: number, month: number) → Transaction[]` | Filters to a calendar month. `month` is **1-based** (1=January, 12=December). |
 | `filterByDateRange` | `(transactions, from: string\|null, to: string\|null) → Transaction[]` | Filters by ISO date bounds, both inclusive. Either bound may be `null` (unbounded on that side). |
+| `filterByAccount` | `(transactions, accountKeys: Set<string>) → Transaction[]` | Returns transactions whose `accountKey` is in the provided set. Empty set returns empty array. |
 | `filterBySearch` | `(transactions, query: string) → Transaction[]` | Case-insensitive match against `description`, `category`, `String(amount)`, and fix flag (`t.fix && 'fix'.includes(q)`). Returns all transactions when query is blank. |
 | `aggregateByCategory` | `(transactions, excludeParents?: string[]) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. Skips any parent listed in `excludeParents` (e.g. `['Transfer']`). |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |

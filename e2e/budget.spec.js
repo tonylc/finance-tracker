@@ -1,5 +1,5 @@
 const { test, expect } = require('playwright/test');
-const { ACCOUNT, BANK_ACCOUNT, LOAD_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget, buildCsv } = require('./seed');
+const { ACCOUNT, BANK_ACCOUNT, LOAD_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget, buildCsv, seedMultiAccountTransactions } = require('./seed');
 const INDEX_URL = 'index.html';
 
 // Helper: load transactions, navigate to Budget tab
@@ -285,5 +285,31 @@ test.describe('Month Navigation', () => {
     await page.keyboard.press('ArrowRight');
     const fromAfter = await page.locator('#budget-from-input').inputValue();
     expect(fromAfter).toBe(fromBefore);
+  });
+});
+
+test.describe('Account Filter', () => {
+  test('given multiple accounts loaded, account filter chips are visible', async ({ page }) => {
+    await seedMultiAccountTransactions(page);
+    await page.goto('index.html');
+    await switchToBudget(page);
+    await expect(page.locator('#budget-account-filter')).toBeVisible();
+  });
+
+  test('given only one account loaded, account filter is hidden', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await loadTransactions(page, LOAD_CSV.categorized);
+    await switchToBudget(page);
+    await expect(page.locator('#budget-account-filter')).not.toBeVisible();
+  });
+
+  test('given a chip clicked to deselect, its transactions are excluded from the count', async ({ page }) => {
+    await seedMultiAccountTransactions(page);
+    await page.goto('index.html');
+    await switchToBudget(page);
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('3');
+    await page.locator('#budget-account-filter [data-account-key="Bank of America *5678"]').click();
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
   });
 });

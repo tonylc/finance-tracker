@@ -152,6 +152,32 @@ function runTests() {
     });
   });
 
+  // ── filterByAccount ───────────────────────────────────────────────────────
+  suite('filterByAccount', () => {
+    const txs = [
+      { id: '1', accountKey: 'Chase *1234',            amount: -10, category: 'Groceries' },
+      { id: '2', accountKey: 'Bank of America *5678',  amount: -20, category: 'Restaurants' },
+      { id: '3', accountKey: 'Chase *1234',            amount: -30, category: 'Groceries' },
+    ];
+    test('given all account keys in set, returns all transactions', () => {
+      const result = filterByAccount(txs, new Set(['Chase *1234', 'Bank of America *5678']));
+      assertEqual(result.length, 3);
+    });
+    test('given a subset of keys, returns only matching transactions', () => {
+      const result = filterByAccount(txs, new Set(['Chase *1234']));
+      assertEqual(result.length, 2);
+      assert(result.every(t => t.accountKey === 'Chase *1234'), 'all from Chase');
+    });
+    test('given empty Set, returns empty array', () => {
+      const result = filterByAccount(txs, new Set());
+      assertEqual(result.length, 0);
+    });
+    test('given empty transactions array, returns empty array', () => {
+      const result = filterByAccount([], new Set(['Chase *1234']));
+      assertEqual(result.length, 0);
+    });
+  });
+
   // ── aggregateByCategory ───────────────────────────────────────────────────
   suite('aggregateByCategory', () => {
     const txs = [

@@ -462,6 +462,8 @@
           <input type="date" id="budget-to-input" class="budget-date-input">
         </div>
 
+        <div id="budget-account-filter" style="display:none; margin-top:10px;"></div>
+
         <div id="budget-warn" style="display:none;"></div>
 
         <div id="budget-search-wrap" style="margin-top:16px;">
@@ -1212,14 +1214,15 @@ document.getElementById('load-copy-btn').addEventListener('click', () => {
 // ══════════════════════════════════════════════════
 //  BUDGET VIEW
 // ══════════════════════════════════════════════════
-let budgetPreset      = null;
-let budgetDateFrom    = null;
-let budgetDateTo      = null;
-let budgetMonthOffset = 0;
-let budgetPage        = 0;
-let budgetDetailPage  = 0;
-let currentBudgetTx   = [];
-let budgetSelectedSub = null; // null = chart panel; string = active detail sub
+let budgetPreset         = null;
+let budgetDateFrom       = null;
+let budgetDateTo         = null;
+let budgetMonthOffset    = 0;
+let budgetPage           = 0;
+let budgetDetailPage     = 0;
+let currentBudgetTx      = [];
+let budgetSelectedSub    = null; // null = chart panel; string = active detail sub
+let budgetAccountFilter  = new Set();
 let selectedIdxs = new Set();
 let multiSelectMode = false;
 let focusedIdx = -1;
@@ -1231,6 +1234,11 @@ function filterByDateRange(transactions, from, to) {
     if (to   && t.date > to)   return false;
     return true;
   });
+}
+
+function filterByAccount(transactions, accountKeys) {
+  if (!accountKeys || accountKeys.size === 0) return [];
+  return transactions.filter(t => accountKeys.has(t.accountKey));
 }
 
 function computePresetRange(preset) {
@@ -1393,11 +1401,42 @@ function renderBudget() {
   document.querySelector('#budget-preset-menu li[data-preset="all"]').classList.add('selected');
   document.getElementById('budget-from-input').value = '';
   document.getElementById('budget-to-input').value = '';
+  budgetAccountFilter = new Set(state.transactions.map(t => t.accountKey));
+  renderAccountFilterChips();
   renderBudgetRange();
 }
 
+function renderAccountFilterChips() {
+  const el = document.getElementById('budget-account-filter');
+  const accountKeys = [...new Set(state.transactions.map(t => t.accountKey))];
+  if (accountKeys.length < 2) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.style.alignItems = 'center';
+  el.style.gap = '8px';
+  el.style.flexWrap = 'wrap';
+  const chips = accountKeys.map(key => {
+    const a = { key };
+    const active = budgetAccountFilter.has(a.key);
+    const style = active
+      ? 'background:#3949ab;border:1px solid #3949ab;color:#fff;text-decoration:none;'
+      : 'background:#f5f5f5;border:1px solid #ddd;color:#aaa;text-decoration:line-through;';
+    return `<span data-account-key="${key}" style="border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;cursor:pointer;${style}">${key}</span>`;
+  }).join('');
+  el.innerHTML = `<span style="font-size:13px;color:#555;">Accounts</span>${chips}`;
+  el.querySelectorAll('[data-account-key]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const key = chip.dataset.accountKey;
+      if (budgetAccountFilter.has(key)) budgetAccountFilter.delete(key);
+      else budgetAccountFilter.add(key);
+      renderAccountFilterChips();
+      renderBudgetRange();
+    });
+  });
+}
+
 function renderBudgetRange() {
-  const filtered = filterByDateRange(state.transactions, budgetDateFrom, budgetDateTo);
+  const dateFiltered = filterByDateRange(state.transactions, budgetDateFrom, budgetDateTo);
+  const filtered = filterByAccount(dateFiltered, budgetAccountFilter);
   const uncategorized = filtered.filter(t => !t.category).length;
   const warnEl = document.getElementById('budget-warn');
   warnEl.style.display = uncategorized > 0 ? 'block' : 'none';
@@ -2137,7 +2176,7 @@ function importAccountsJSON(jsonString) {
 
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
-  parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterBySearch, aggregateByCategory,
+  parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
   exportAccountsJSON, importAccountsJSON, isValidLast4,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,

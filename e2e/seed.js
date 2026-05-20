@@ -125,4 +125,21 @@ function buildCsv(n) {
   return rows.join('\n');
 }
 
-module.exports = { ACCOUNT, BANK_ACCOUNT, BANK_CSV, LOAD_CSV, CAT_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget, buildCsv };
+// Seed two accounts + their transactions directly into localStorage for Account Filter tests.
+async function seedMultiAccountTransactions(page) {
+  await page.addInitScript(() => {
+    const accounts = [
+      { id: 'seed-acct-1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', null, 'amount'] },
+      { id: 'seed-acct-2', name: 'Bank of America', last4: '5678', type: 'bank',   inputCsvFormat: ['date', 'description', null, 'amount'] },
+    ];
+    localStorage.setItem('financeTrackerConfig', JSON.stringify({ accounts }));
+    const transactions = [
+      { id: 'tx-1', accountKey: 'Chase *1234',           date: '2024-03-15', description: 'Coffee Roasters', amount: -4.50,  category: 'Coffee / Bakery',        fix: false },
+      { id: 'tx-2', accountKey: 'Chase *1234',           date: '2024-03-20', description: 'Whole Foods',     amount: -87.32, category: 'Groceries',              fix: false },
+      { id: 'tx-3', accountKey: 'Bank of America *5678', date: '2024-03-18', description: 'Shell Gas',       amount: -45.00, category: 'Gas / EV Charging / Toll', fix: false },
+    ];
+    localStorage.setItem('financeTrackerTx', JSON.stringify(transactions));
+  });
+}
+
+module.exports = { ACCOUNT, BANK_ACCOUNT, BANK_CSV, LOAD_CSV, CAT_CSV, seedAccounts, seedBankAccount, loadTransactions, switchToBudget, buildCsv, seedMultiAccountTransactions };
