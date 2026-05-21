@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Investment Tracker — Tests</title>
+<style>
+  body { font-family: -apple-system, sans-serif; font-size: 13px; margin: 0; background: #f5f5f5; }
+  header { background: #1a1a2e; color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 16px; font-weight: 700; }
+  #summary { padding: 10px 24px; background: #fff; border-bottom: 1px solid #ddd; font-size: 13px; }
+  #summary .pass { color: #2e7d32; font-weight: 700; }
+  #summary .fail { color: #b71c1c; font-weight: 700; }
+  main { max-width: 860px; margin: 20px auto; padding: 0 16px; }
+  .suite { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .suite-header { background: #1a1a2e; color: #fff; padding: 10px 16px; font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; }
+  .suite-header .badge { font-size: 11px; background: rgba(255,255,255,.15); border-radius: 10px; padding: 2px 10px; }
+  .test { padding: 8px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: flex-start; gap: 10px; }
+  .test:last-child { border-bottom: none; }
+  .icon { font-size: 14px; line-height: 1.4; flex-shrink: 0; }
+  .test-name { flex: 1; }
+  .test-err { font-size: 11px; color: #b71c1c; margin-top: 3px; font-family: 'Courier New', monospace; white-space: pre-wrap; }
+  .pass-bg { background: #f9fff9; }
+  .fail-bg { background: #fff5f5; }
+  .test { cursor: pointer; }
+  .test:hover { filter: brightness(0.97); }
+  .test-toggle { flex-shrink: 0; color: #999; font-size: 11px; line-height: 1.4; user-select: none; }
+  .test-source { display: none; margin-top: 6px; font-size: 11px; font-family: 'Courier New', monospace; background: #1a1a2e; color: #e8e8e8; padding: 8px 12px; border-radius: 4px; white-space: pre; overflow-x: auto; }
+  .test.expanded .test-source { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Investment Tracker — Unit Tests</h1>
+  <span id="header-status" style="font-size:13px;"></span>
+</header>
+<div id="summary">Loading tests…</div>
+<main id="main"></main>
+
+<iframe id="app-frame" src="index.html" style="display:none;" onload="runTests()"></iframe>
+
+<script>
+const results = [];
+let currentSuite = null;
+
+function suite(name, fn) {
+  currentSuite = { name, tests: [] };
+  results.push(currentSuite);
+  fn();
+}
+
+function test(name, fn) {
+  const src = fn.toString();
+  try {
+    fn();
+    currentSuite.tests.push({ name, pass: true, src });
+  } catch (e) {
+    currentSuite.tests.push({ name, pass: false, err: e.message, src });
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function assert(condition, msg) {
+  if (!condition) throw new Error(msg || 'Assertion failed');
+}
+
+function assertEqual(a, b) {
+  const as = JSON.stringify(a), bs = JSON.stringify(b);
+  if (as !== bs) throw new Error(`Expected ${bs}\n  Got     ${as}`);
+}
+
+function runTests() {
+  const lib = document.getElementById('app-frame').contentWindow.__investmentLib;
+  if (!lib) {
+    document.getElementById('summary').textContent = 'ERROR: __investmentLib not found in index.html';
+    return;
+  }
+  const {
+    buildHoldingsHeaderMap, validateHoldingsImport, parseHolding,
+    replaceHoldings, getTrackedTickers,
+    computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
+    formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
+    fmtCurrency, fmtPercent, fmtShares,
+    parseCSV,
+  } = lib;
+
+  // ══ §buildHoldingsHeaderMap ══════════════════════════════════════════════
+  suite('buildHoldingsHeaderMap', () => {
+    test('positional: maps ticker and shares correctly', () => {
+      const r = buildHoldingsHeaderMap([], ['ticker', 'security_name', 'shares']);
+      assert(r.ticker === 0, 'ticker should be at index 0');
+      assert(r.shares === 2, 'shares should be at index 2');
+      assert(r.securityName === 1, 'securityName should be at index 1');
+    });
+
+    test('returns error when ticker column missing', () => {
+      const r = buildHoldingsHeaderMap([], ['shares', null]);
+      assert(r.error !== undefined, 'should return error');
+      assert(r.error.toLowerCase().includes('ticker'), 'error should mention ticker');
+    });
+
+    test('returns error when shares column missing', () => {
+      const r = buildHoldingsHeaderMap([], ['ticker', null]);
+      assert(r.error !== undefined, 'should return error');
+      assert(r.error.toLowerCase().includes('shares'), 'error should mention shares');
+    });
+
+    test('header-name fallback: matches Symbol and Quantity case-insensitively', () => {
+      const r = buildHoldingsHeaderMap(['Symbol', 'Quantity', 'Description']);
+      assert(r.ticker === 0, 'ticker should be at index 0');
+      assert(r.shares === 1, 'shares should be at index 1');
+      assert(r.securityName === 2, 'securityName should be at index 2');
+    });
+
+    test('header-name fallback: matches Ticker and Shares', () => {
+      const r = buildHoldingsHeaderMap(['Ticker', 'Shares']);
+      assert(r.ticker === 0, 'ticker at 0');
+      assert(r.shares === 1, 'shares at 1');
+    });
+
+    test('accepts cost_basis_per_share token', () => {
+      const r = buildHoldingsHeaderMap([], ['ticker', 'shares', 'cost_basis_per_share']);
+      assert(r.costBasisPerShare === 2, 'costBasisPerShare should be at index 2');
+    });
+
+    test('returns error for unknown token', () => {
+      const r = buildHoldingsHeaderMap([], ['ticker', 'shares', 'foo_bar']);
+      assert(r.error !== undefined, 'should return error for unknown token');
+    });
+
+    test('returns error for duplicate ticker column', () => {
+      const r = buildHoldingsHeaderMap([], ['ticker', 'ticker', 'shares']);
+      assert(r.error !== undefined, 'should return error for duplicate ticker');
+    });
+  });
+
+  // ══ §parseHolding ════════════════════════════════════════════════════════
+  suite('parseHolding', () => {
+    const hm = { ticker: 0, shares: 1, securityName: -1, costBasis: -1, costBasisPerShare: -1 };
+
+    test('uppercases ticker', () => {
+      const h = parseHolding(['vti', '100'], hm, 'Vanguard *1234');
+      assertEqual(h.ticker, 'VTI');
+    });
+
+    test('sets accountKey', () => {
+      const h = parseHolding(['VTI', '100'], hm, 'Vanguard *1234');
+      assertEqual(h.accountKey, 'Vanguard *1234');
+    });
+
+    test('computes costBasis from cost_basis_per_share × shares', () => {
+      const hmCps = { ticker: 0, shares: 1, securityName: -1, costBasis: -1, costBasisPerShare: 2 };
+      const h = parseHolding(['VTI', '100', '250.00'], hmCps, 'Vanguard *1234');
+      assertEqual(h.costBasis, 25000);
+    });
+
+    test('defaults costBasis to 0 when absent', () => {
+      const h = parseHolding(['VTI', '100'], hm, 'Vanguard *1234');
+      assertEqual(h.costBasis, 0);
+    });
+
+    test('strips $ and commas from shares', () => {
+      const h = parseHolding(['VTI', '1,234.56'], hm, 'Vanguard *1234');
+      assertEqual(h.shares, 1234.56);
+    });
+
+    test('strips $ and commas from cost_basis', () => {
+      const hmCb = { ticker: 0, shares: 1, securityName: -1, costBasis: 2, costBasisPerShare: -1 };
+      const h = parseHolding(['VTI', '100', '$25,000.00'], hmCb, 'Vanguard *1234');
+      assertEqual(h.costBasis, 25000);
+    });
+
+    test('captures securityName', () => {
+      const hmSn = { ticker: 0, shares: 1, securityName: 2, costBasis: -1, costBasisPerShare: -1 };
+      const h = parseHolding(['VTI', '100', 'Vanguard Total Stock Market'], hmSn, 'Vanguard *1234');
+      assertEqual(h.securityName, 'Vanguard Total Stock Market');
+    });
+  });
+
+  // ══ §validateHoldingsImport ══════════════════════════════════════════════
+  suite('validateHoldingsImport', () => {
+    const hm = { ticker: 0, shares: 1, securityName: -1, costBasis: -1, costBasisPerShare: -1 };
+
+    test('valid row passes', () => {
+      const { valid } = validateHoldingsImport([['VTI', '100']], hm);
+      assertEqual(valid, true);
+    });
+
+    test('missing ticker returns error', () => {
+      const { valid, errors } = validateHoldingsImport([['', '100']], hm);
+      assertEqual(valid, false);
+      assert(errors.length > 0, 'should have errors');
+    });
+
+    test('zero shares returns error', () => {
+      const { valid, errors } = validateHoldingsImport([['VTI', '0']], hm);
+      assertEqual(valid, false);
+      assert(errors.length > 0, 'should have errors');
+    });
+
+    test('non-numeric shares returns error', () => {
+      const { valid, errors } = validateHoldingsImport([['VTI', 'abc']], hm);
+      assertEqual(valid, false);
+      assert(errors.length > 0, 'should have errors');
+    });
+
+    test('negative shares returns error', () => {
+      const { valid } = validateHoldingsImport([['VTI', '-5']], hm);
+      assertEqual(valid, false);
+    });
+
+    test('multiple rows: first valid, second invalid', () => {
+      const { valid, errors } = validateHoldingsImport([['VTI', '100'], ['', '50']], hm);
+      assertEqual(valid, false);
+      assert(errors.length === 1, 'one error for second row');
+    });
+  });
+
+  // ══ §replaceHoldings ════════════════════════════════════════════════════
+  suite('replaceHoldings', () => {
+    const existing = [
+      { id: '1', accountKey: 'Vanguard *1234', ticker: 'VTI', shares: 100, securityName: '', costBasis: 0 },
+      { id: '2', accountKey: 'Robinhood *5678', ticker: 'AAPL', shares: 10, securityName: '', costBasis: 0 },
+    ];
+    const incoming = [
+      { id: '3', accountKey: 'Vanguard *1234', ticker: 'BND', shares: 50, securityName: '', costBasis: 0 },
+    ];
+
+    test('removes all existing rows for accountKey and appends incoming', () => {
+      const result = replaceHoldings(existing, incoming, 'Vanguard *1234');
+      assert(!result.find(h => h.id === '1'), 'old Vanguard holding removed');
+      assert(result.find(h => h.id === '3'), 'new holding present');
+    });
+
+    test('leaves other accounts untouched', () => {
+      const result = replaceHoldings(existing, incoming, 'Vanguard *1234');
+      assert(result.find(h => h.id === '2'), 'Robinhood holding should remain');
+    });
+
+    test('replacing with empty array clears account', () => {
+      const result = replaceHoldings(existing, [], 'Vanguard *1234');
+      assert(!result.find(h => h.accountKey === 'Vanguard *1234'), 'no Vanguard holdings');
+      assert(result.find(h => h.id === '2'), 'other accounts unchanged');
+    });
+  });
+
+  // ══ §getTrackedTickers ═══════════════════════════════════════════════════
+  suite('getTrackedTickers', () => {
+    test('returns unique tickers sorted alphabetically', () => {
+      const holdings = [
+        { ticker: 'VTI' }, { ticker: 'AAPL' }, { ticker: 'VTI' }, { ticker: 'MSFT' },
+      ];
+      assertEqual(getTrackedTickers(holdings), ['AAPL', 'MSFT', 'VTI']);
+    });
+
+    test('returns empty array for no holdings', () => {
+      assertEqual(getTrackedTickers([]), []);
+    });
+  });
+
+  // ══ §computePortfolioValue ═══════════════════════════════════════════════
+  suite('computePortfolioValue', () => {
+    const holdings = [
+      { accountKey: 'A *1234', ticker: 'VTI', securityName: 'Vanguard', shares: 100, costBasis: 20000 },
+    ];
+
+    test('value = shares × price', () => {
+      const positions = computePortfolioValue(holdings, { VTI: 285.50 });
+      assertEqual(positions[0].value, 28550);
+    });
+
+    test('gain = value - costBasis', () => {
+      const positions = computePortfolioValue(holdings, { VTI: 285.50 });
+      assertEqual(positions[0].gain, 8550);
+    });
+
+    test('gainPct = gain / costBasis × 100', () => {
+      const positions = computePortfolioValue(holdings, { VTI: 285.50 });
+      assertEqual(Math.round(positions[0].gainPct * 100) / 100, 42.75);
+    });
+
+    test('missing price sets value and gain to null', () => {
+      const positions = computePortfolioValue(holdings, {});
+      assertEqual(positions[0].value, null);
+      assertEqual(positions[0].gain, null);
+      assertEqual(positions[0].gainPct, null);
+    });
+
+    test('zero costBasis sets gainPct to null', () => {
+      const h = [{ accountKey: 'A', ticker: 'X', securityName: '', shares: 10, costBasis: 0 }];
+      const positions = computePortfolioValue(h, { X: 100 });
+      assertEqual(positions[0].gainPct, null);
+    });
+  });
+
+  // ══ §computeAccountTotals ════════════════════════════════════════════════
+  suite('computeAccountTotals', () => {
+    test('sums value and costBasis per accountKey', () => {
+      const positions = [
+        { accountKey: 'A *1234', value: 28550, costBasis: 20000 },
+        { accountKey: 'A *1234', value: 5000, costBasis: 4000 },
+        { accountKey: 'B *5678', value: 3000, costBasis: 2500 },
+      ];
+      const totals = computeAccountTotals(positions);
+      assertEqual(totals['A *1234'].value, 33550);
+      assertEqual(totals['A *1234'].costBasis, 24000);
+      assertEqual(totals['B *5678'].value, 3000);
+    });
+
+    test('skips positions with null value in value sum but keeps costBasis', () => {
+      const positions = [
+        { accountKey: 'A *1234', value: null, costBasis: 20000 },
+      ];
+      const totals = computeAccountTotals(positions);
+      assertEqual(totals['A *1234'].value, 0);
+      assertEqual(totals['A *1234'].costBasis, 20000);
+    });
+  });
+
+  // ══ §computeNetworth ════════════════════════════════════════════════════
+  suite('computeNetworth', () => {
+    test('sums position values, skips nulls', () => {
+      const positions = [
+        { value: 28550 }, { value: null }, { value: 5000 },
+      ];
+      assertEqual(computeNetworth(positions), 33550);
+    });
+
+    test('returns 0 for empty positions', () => {
+      assertEqual(computeNetworth([]), 0);
+    });
+
+    test('returns 0 when all values are null', () => {
+      assertEqual(computeNetworth([{ value: null }]), 0);
+    });
+  });
+
+  // ══ §buildNetworthSnapshot ══════════════════════════════════════════════
+  suite('buildNetworthSnapshot', () => {
+    const accountTotals = {
+      'Vanguard *1234': { value: 28500, costBasis: 22000 },
+      'Robinhood *5678': { value: 5200, costBasis: 4100 },
+    };
+
+    test('snapshot has correct date, totalValue, totalCostBasis', () => {
+      const snap = buildNetworthSnapshot(accountTotals, '2026-05-21');
+      assertEqual(snap.date, '2026-05-21');
+      assertEqual(snap.totalValue, 33700);
+      assertEqual(snap.totalCostBasis, 26100);
+    });
+
+    test('accounts map contains per-account breakdowns', () => {
+      const snap = buildNetworthSnapshot(accountTotals, '2026-05-21');
+      assertEqual(snap.accounts['Vanguard *1234'].value, 28500);
+      assertEqual(snap.accounts['Robinhood *5678'].costBasis, 4100);
+    });
+
+    test('snapshot has an id', () => {
+      const snap = buildNetworthSnapshot(accountTotals, '2026-05-21');
+      assert(typeof snap.id === 'string' && snap.id.length > 0, 'id should be a non-empty string');
+    });
+  });
+
+  // ══ §formatAccountKey ═══════════════════════════════════════════════════
+  suite('formatAccountKey', () => {
+    test('formats as "Name *last4"', () => {
+      assertEqual(formatAccountKey('Vanguard', '1234'), 'Vanguard *1234');
+    });
+  });
+
+  // ══ §isValidLast4 ════════════════════════════════════════════════════════
+  suite('isValidLast4', () => {
+    test('exactly 4 digits is valid', () => {
+      assertEqual(isValidLast4('1234'), true);
+    });
+    test('3 digits is invalid', () => {
+      assertEqual(isValidLast4('123'), false);
+    });
+    test('5 digits is invalid', () => {
+      assertEqual(isValidLast4('12345'), false);
+    });
+    test('letters are invalid', () => {
+      assertEqual(isValidLast4('abcd'), false);
+    });
+  });
+
+  // ══ §fmtCurrency ════════════════════════════════════════════════════════
+  suite('fmtCurrency', () => {
+    test('formats positive number with $ and commas', () => {
+      assertEqual(fmtCurrency(1234.56), '$1,234.56');
+    });
+    test('formats negative number with minus sign', () => {
+      assertEqual(fmtCurrency(-500), '-$500.00');
+    });
+    test('formats zero', () => {
+      assertEqual(fmtCurrency(0), '$0.00');
+    });
+    test('returns em dash for null', () => {
+      assertEqual(fmtCurrency(null), '—');
+    });
+  });
+
+  // ══ §fmtPercent ══════════════════════════════════════════════════════════
+  suite('fmtPercent', () => {
+    test('positive number gets plus sign', () => {
+      assertEqual(fmtPercent(12.34), '+12.34%');
+    });
+    test('negative number shows minus sign', () => {
+      assertEqual(fmtPercent(-5.5), '-5.50%');
+    });
+    test('returns em dash for null', () => {
+      assertEqual(fmtPercent(null), '—');
+    });
+  });
+
+  // ══ §fmtShares ═══════════════════════════════════════════════════════════
+  suite('fmtShares', () => {
+    test('integer trims to no decimals', () => {
+      assertEqual(fmtShares(100), '100');
+    });
+    test('fractional shares keep up to 6 decimals trimmed', () => {
+      assertEqual(fmtShares(100.5), '100.5');
+    });
+    test('returns em dash for null', () => {
+      assertEqual(fmtShares(null), '—');
+    });
+  });
+
+  renderResults();
+}
+
+function renderResults() {
+  let totalPass = 0, totalFail = 0;
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+
+  for (const s of results) {
+    const p = s.tests.filter(t => t.pass).length;
+    const allPass = p === s.tests.length;
+    totalPass += p;
+    totalFail += s.tests.length - p;
+
+    const div = document.createElement('div');
+    div.className = 'suite';
+    div.innerHTML = `<div class="suite-header">${escapeHtml(s.name)}<span class="badge">${p}/${s.tests.length}</span></div>`;
+
+    for (const t of s.tests) {
+      const row = document.createElement('div');
+      row.className = `test ${t.pass ? 'pass-bg' : 'fail-bg'}`;
+      row.innerHTML = `
+        <span class="icon">${t.pass ? '✓' : '✗'}</span>
+        <div class="test-name">
+          ${escapeHtml(t.name)}
+          ${t.err ? `<div class="test-err">${escapeHtml(t.err)}</div>` : ''}
+          <div class="test-source">${escapeHtml(t.src || '')}</div>
+        </div>
+        <span class="test-toggle">[src]</span>`;
+      row.addEventListener('click', () => row.classList.toggle('expanded'));
+      div.appendChild(row);
+    }
+    main.appendChild(div);
+  }
+
+  const summary = document.getElementById('summary');
+  if (totalFail === 0) {
+    summary.innerHTML = `<span class="pass">All ${totalPass} tests passed</span>`;
+    document.getElementById('header-status').textContent = `✓ ${totalPass} passed`;
+  } else {
+    summary.innerHTML = `<span class="fail">${totalFail} failed</span> · <span class="pass">${totalPass} passed</span> · ${totalPass + totalFail} total`;
+    document.getElementById('header-status').textContent = `✗ ${totalFail} failed`;
+  }
+}
+</script>
+</body>
+</html>

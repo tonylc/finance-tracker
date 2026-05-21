@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investment Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #f5f5f5;
+    color: #222;
+    min-height: 100vh;
+  }
+
+  /* ── Nav ── */
+  header {
+    background: #1a1a2e;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    height: 52px;
+  }
+  header .brand {
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: .5px;
+    white-space: nowrap;
+  }
+  nav { display: flex; gap: 4px; }
+  nav button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #aab;
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .15s;
+  }
+  nav button:hover { color: #fff; border-color: #444; }
+  nav button.active { background: #e8f4fd; color: #1a1a2e; border-color: transparent; font-weight: 600; }
+
+  /* ── Layout ── */
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 20px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #1a1a2e; }
+  h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #444; }
+
+  /* ── Cards ── */
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Form elements ── */
+  label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%;
+    border: 1px solid #d0d0d0;
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #222;
+    background: #fff;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, textarea:focus, select:focus {
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 3px rgba(74,144,217,.12);
+  }
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .form-row .field { flex: 1; }
+  .form-row .field-sm { flex: 0 0 120px; }
+
+  textarea { resize: vertical; font-family: 'Courier New', monospace; font-size: 12px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background .15s, opacity .15s;
+  }
+  .btn-primary { background: #1a1a2e; color: #fff; }
+  .btn-primary:hover { background: #2d2d4e; }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; opacity: .7; }
+  .btn-success { background: #2e7d32; color: #fff; }
+  .btn-success:hover { background: #388e3c; }
+  .btn-success:disabled { background: #aaa; cursor: not-allowed; opacity: .7; }
+  .btn-danger { background: #b71c1c; color: #fff; }
+  .btn-danger:hover { background: #c62828; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-secondary { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+  .btn-secondary:hover { background: #f0f0f0; }
+
+  /* ── Alerts ── */
+  .alert {
+    border-radius: 5px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .alert-error { background: #fdecea; border: 1px solid #f5c6cb; color: #b71c1c; }
+  .alert-success { background: #e8f5e9; border: 1px solid #c8e6c9; color: #1b5e20; }
+  .alert-warn { background: #fff8e1; border: 1px solid #ffe082; color: #6d4c00; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    background: #f0f0f0;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #555;
+    border-bottom: 2px solid #ddd;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafafa; }
+  tr:hover td { background: #f0f7ff; }
+
+  .td-num { text-align: right; font-family: 'Courier New', monospace; white-space: nowrap; }
+  .td-gain { text-align: right; font-family: 'Courier New', monospace; white-space: nowrap; font-weight: 600; }
+  .gain-pos { color: #2e7d32; }
+  .gain-neg { color: #c62828; }
+
+  /* ── Summary banner ── */
+  .total-banner {
+    background: #1a1a2e;
+    color: #fff;
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .total-banner .stat { display: flex; flex-direction: column; }
+  .total-banner .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #aab; }
+  .total-banner .stat-value { font-size: 22px; font-weight: 700; font-family: 'Courier New', monospace; }
+  .total-banner .stat-value.gain-pos { color: #81c784; }
+  .total-banner .stat-value.gain-neg { color: #ef9a9a; }
+
+  /* ── Account chips ── */
+  .accounts-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; margin-bottom: 16px; }
+  .account-chip {
+    background: #e8eaf6;
+    border: 1px solid #c5cae9;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #3949ab;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .account-chip span { background: #3949ab; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; }
+
+  /* ── Empty state ── */
+  .empty-state { color: #888; font-size: 13px; padding: 20px 0; text-align: center; }
+
+  /* ── Flex utilities ── */
+  .flex-between { display: flex; align-items: center; justify-content: space-between; }
+  .mt-16 { margin-top: 16px; }
+
+  /* ── Portfolio account group rows ── */
+  .portfolio-table tr.acct-row td {
+    background: #e8eaf6;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #333;
+    border-top: 2px solid #c5cae9;
+  }
+  .portfolio-table tr.total-row td {
+    background: #1a1a2e;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .portfolio-table tr.total-row td.gain-pos { color: #81c784; }
+  .portfolio-table tr.total-row td.gain-neg { color: #ef9a9a; }
+
+  /* ── Prices table editable ── */
+  .prices-price-input {
+    width: 120px;
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    padding: 4px 8px;
+  }
+
+  /* ── History chart ── */
+  #history-chart svg { display: block; overflow: visible; }
+  #history-chart { background: #fafff8; border: 1px solid #e0f0e0; border-radius: 6px; padding: 12px; margin-bottom: 16px; }
+
+  /* ── History table ── */
+  .history-table tr.selected-row td { background: #f0f7ff; }
+
+  /* ── Spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2px solid #ccc;
+    border-top-color: #1a1a2e;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Investment Tracker</div>
+  <nav>
+    <button class="active" data-view="upload">Upload</button>
+    <button data-view="portfolio">Portfolio</button>
+    <button data-view="prices">Prices</button>
+    <button data-view="history">History</button>
+    <button data-view="settings">Settings</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ══════════════════ UPLOAD VIEW ══════════════════ -->
+  <div id="view-upload" class="view active">
+    <h2>Upload Holdings</h2>
+
+    <div class="card">
+      <h3>Account</h3>
+      <div id="upload-no-accounts" class="alert alert-warn" style="display:none;">
+        No accounts configured. Go to <a href="#" id="goto-settings-link" style="color:inherit;font-weight:700;">Settings</a> to add accounts first.
+      </div>
+      <div id="upload-acct-wrap">
+        <div class="form-row" style="margin-bottom:0;">
+          <div class="field">
+            <label for="upload-acct-select">Select Account</label>
+            <select id="upload-acct-select">
+              <option value="">— select account —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="upload-csv-card" style="display:none;">
+      <h3>Holdings CSV</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">
+        Paste your broker's holdings export below, or click <strong>Choose File</strong>.
+        Uploading will replace all current holdings for the selected account.
+      </p>
+      <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+        <label for="upload-file" class="btn btn-primary btn-sm" style="cursor:pointer;margin:0;">Choose File</label>
+        <input type="file" id="upload-file" accept=".csv,.txt" style="display:none;">
+        <span id="upload-file-name" style="font-size:12px;color:#777;"></span>
+      </div>
+      <textarea id="upload-csv" rows="8" placeholder="Paste CSV here…"></textarea>
+      <div id="upload-error" class="alert alert-error" style="display:none;margin-top:10px;"></div>
+      <div id="upload-success" class="alert alert-success" style="display:none;margin-top:10px;"></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-primary" id="upload-import-btn">Import Holdings</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:12px;">
+        <h3 style="margin:0;">Current Holdings</h3>
+        <span id="upload-holdings-count" style="font-size:12px;color:#777;"></span>
+      </div>
+      <div id="upload-empty" class="empty-state">No holdings loaded yet. Upload a CSV to get started.</div>
+      <div id="upload-accounts-chips" class="accounts-list" style="display:none;"></div>
+      <div id="upload-table-wrap" style="display:none;overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Ticker</th>
+              <th>Security Name</th>
+              <th style="text-align:right;">Shares</th>
+              <th style="text-align:right;">Cost Basis</th>
+              <th style="text-align:right;">Cost / Share</th>
+            </tr>
+          </thead>
+          <tbody id="upload-holdings-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ PORTFOLIO VIEW ══════════════════ -->
+  <div id="view-portfolio" class="view">
+    <h2>Portfolio</h2>
+
+    <div class="total-banner">
+      <div class="stat">
+        <span class="stat-label">Total Value</span>
+        <span class="stat-value" id="port-total-value">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Cost Basis</span>
+        <span class="stat-value" id="port-cost-basis">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Unrealized Gain</span>
+        <span class="stat-value" id="port-gain">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Return</span>
+        <span class="stat-value" id="port-return-pct">—</span>
+      </div>
+    </div>
+
+    <div id="port-no-holdings" class="alert alert-warn" style="display:none;">
+      No holdings loaded. Go to <strong>Upload</strong> to add your positions.
+    </div>
+    <div id="port-no-prices" class="alert alert-warn" style="display:none;">
+      No prices loaded. Go to <strong>Prices</strong> to fetch current market prices.
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0 0 4px;">Positions</h3>
+          <div id="port-prices-date" style="font-size:12px;color:#777;"></div>
+        </div>
+        <button class="btn btn-success btn-sm" id="port-snapshot-btn" disabled>Save Snapshot</button>
+      </div>
+      <div id="port-empty" class="empty-state" style="display:none;">No holdings to display.</div>
+      <div id="port-table-wrap" style="display:none;overflow-x:auto;">
+        <table class="portfolio-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Ticker</th>
+              <th>Security Name</th>
+              <th style="text-align:right;">Shares</th>
+              <th style="text-align:right;">Price</th>
+              <th style="text-align:right;">Value</th>
+              <th style="text-align:right;">Cost Basis</th>
+              <th style="text-align:right;">Gain / Loss</th>
+              <th style="text-align:right;">Return</th>
+            </tr>
+          </thead>
+          <tbody id="port-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ PRICES VIEW ══════════════════ -->
+  <div id="view-prices" class="view">
+    <h2>Prices</h2>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0 0 4px;">Current Prices</h3>
+          <div id="prices-last-fetched" style="font-size:12px;color:#777;">No prices saved yet.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label for="prices-file" class="btn btn-primary btn-sm" style="cursor:pointer;margin:0;">Import CSV</label>
+          <input type="file" id="prices-file" accept=".csv,.txt" style="display:none;">
+          <button class="btn btn-primary btn-sm" id="prices-fetch-btn">Fetch from Yahoo Finance</button>
+        </div>
+      </div>
+
+      <div id="prices-spinner" style="display:none;padding:16px 0;">
+        <span class="spinner"></span> Fetching prices from Yahoo Finance…
+      </div>
+      <div id="prices-error" class="alert alert-error" style="display:none;"></div>
+      <div id="prices-success" class="alert alert-success" style="display:none;"></div>
+
+      <div id="prices-no-tickers" class="empty-state" style="display:none;">
+        No tickers tracked yet. Upload holdings first, then return here to fetch prices.
+      </div>
+
+      <div id="prices-table-wrap" style="display:none;">
+        <p style="font-size:12px;color:#777;margin-bottom:10px;">
+          Review and edit prices below, then click <strong>Save Prices</strong>.
+        </p>
+        <table id="prices-table" style="max-width:360px;">
+          <thead>
+            <tr><th>Ticker</th><th style="text-align:right;">Price (USD)</th></tr>
+          </thead>
+          <tbody id="prices-tbody"></tbody>
+        </table>
+        <div style="margin-top:14px;">
+          <button class="btn btn-success" id="prices-save-btn">Save Prices</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ HISTORY VIEW ══════════════════ -->
+  <div id="view-history" class="view">
+    <h2>Networth History</h2>
+
+    <div id="history-empty" class="card" style="display:none;">
+      <div class="empty-state">
+        No snapshots yet. Go to <strong>Portfolio</strong> and click <strong>Save Snapshot</strong> after loading prices.
+      </div>
+    </div>
+
+    <div id="history-main" style="display:none;">
+      <div class="card">
+        <h3 style="margin-bottom:12px;">Networth Over Time</h3>
+        <div id="history-chart"></div>
+      </div>
+
+      <div class="card">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th style="text-align:right;">Total Value</th>
+              <th style="text-align:right;">Cost Basis</th>
+              <th style="text-align:right;">Gain / Loss</th>
+              <th style="text-align:right;">Return</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ SETTINGS VIEW ══════════════════ -->
+  <div id="view-settings" class="view">
+    <h2>Settings</h2>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px;">
+        <h3 style="margin:0;">Account Profiles</h3>
+        <button class="btn btn-primary btn-sm" id="settings-add-btn">+ Add Account</button>
+      </div>
+      <div id="settings-empty" class="empty-state" style="display:none;">No accounts configured yet. Click &ldquo;+ Add Account&rdquo; to get started.</div>
+      <table id="settings-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>Account Name</th>
+            <th>Last 4</th>
+            <th>Columns Mapped</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="settings-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px;">Export Settings</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Save your account configurations as JSON to restore them in another browser.</p>
+      <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
+      <div id="settings-export-section" style="display:none;margin-top:12px;">
+        <label for="settings-export-field" style="font-size:12px;color:#555;">Minified JSON (copy this)</label>
+        <textarea id="settings-export-field" readonly rows="3" style="font-family:monospace;font-size:11px;margin-top:4px;"></textarea>
+        <label style="font-size:12px;color:#555;margin-top:10px;display:block;">Pretty-printed preview</label>
+        <pre id="settings-export-pretty" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;overflow:auto;margin-top:4px;white-space:pre-wrap;word-break:break-all;"></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px;">Import Settings</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Paste a previously exported JSON blob to replace your current account configurations.</p>
+      <label for="settings-import-field" style="font-size:12px;color:#555;">Paste JSON here</label>
+      <textarea id="settings-import-field" rows="3" placeholder='[{"id":"...","name":"...","last4":"...","inputCsvFormat":[...]}]' style="font-family:monospace;font-size:11px;margin-top:4px;"></textarea>
+      <div id="settings-import-error" class="alert alert-error" style="display:none;margin-top:8px;"></div>
+      <button class="btn btn-primary btn-sm" id="settings-import-btn" style="margin-top:8px;">Import Settings</button>
+    </div>
+
+    <div class="card" id="settings-form-card" style="display:none;">
+      <h3 id="settings-form-title">Add Account</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="sf-name">Account Name</label>
+          <input type="text" id="sf-name" placeholder="e.g. Vanguard">
+        </div>
+        <div class="field-sm">
+          <label for="sf-last4">Last 4 Digits</label>
+          <input type="text" id="sf-last4" maxlength="4" placeholder="1234">
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label for="sf-format-input">Column Format</label>
+        <p style="font-size:12px;color:#777;margin-bottom:6px;">
+          JSON array mapping each CSV column to a field. Allowed values:
+          <code>"ticker"</code>, <code>"shares"</code>, <code>"security_name"</code>,
+          <code>"cost_basis"</code>, <code>"cost_basis_per_share"</code>, <code>null</code> (skip).
+          Required: <code>"ticker"</code> and <code>"shares"</code>.
+        </p>
+        <input type="text" id="sf-format-input" placeholder='e.g. ["ticker","security_name","shares","cost_basis_per_share",null]' style="font-family:monospace;font-size:12px;">
+      </div>
+      <div id="sf-form-error" class="alert alert-error" style="display:none;"></div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" id="sf-save-btn">Save Account</button>
+        <button class="btn" style="background:#eee;color:#333;" id="sf-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════
+//  PURE LIBRARY FUNCTIONS
+// ══════════════════════════════════════════════════
+
+// ── CSV parsing ──────────────────────────────────
+function parseCSV(raw) {
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/^﻿/, '');
+  return normalized.split('\n').filter(l => l.trim() !== '').map(parseCSVLine);
+}
+
+function parseCSVLine(line) {
+  const fields = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      let val = '';
+      i++;
+      while (i < line.length) {
+        if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
+        else if (line[i] === '"') { i++; break; }
+        else { val += line[i++]; }
+      }
+      fields.push(val);
+      if (line[i] === ',') i++;
+    } else {
+      const end = line.indexOf(',', i);
+      if (end === -1) { fields.push(line.slice(i).trim()); break; }
+      else { fields.push(line.slice(i, end).trim()); i = end + 1; }
+    }
+  }
+  return fields;
+}
+
+// ── Holdings header map ──────────────────────────
+const HOLDINGS_TOKENS = new Set(['ticker', 'shares', 'security_name', 'cost_basis', 'cost_basis_per_share', null]);
+
+function buildHoldingsHeaderMap(headerRow, inputCsvFormat) {
+  if (inputCsvFormat) {
+    for (const t of inputCsvFormat) {
+      if (!HOLDINGS_TOKENS.has(t)) {
+        return { error: `Unknown column token "${t}". Allowed: ticker, shares, security_name, cost_basis, cost_basis_per_share, null.` };
+      }
+    }
+    const map = { ticker: -1, shares: -1, securityName: -1, costBasis: -1, costBasisPerShare: -1 };
+    for (let i = 0; i < inputCsvFormat.length; i++) {
+      const t = inputCsvFormat[i];
+      if (t === 'ticker')               { if (map.ticker !== -1) return { error: 'Duplicate "ticker" column.' }; map.ticker = i; }
+      if (t === 'shares')               { if (map.shares !== -1) return { error: 'Duplicate "shares" column.' }; map.shares = i; }
+      if (t === 'security_name')        map.securityName = i;
+      if (t === 'cost_basis')           map.costBasis = i;
+      if (t === 'cost_basis_per_share') map.costBasisPerShare = i;
+    }
+    if (map.ticker === -1) return { error: 'Column format must include a "ticker" column.' };
+    if (map.shares === -1) return { error: 'Column format must include a "shares" column.' };
+    return map;
+  }
+
+  // Header-name fallback
+  const map = { ticker: -1, shares: -1, securityName: -1, costBasis: -1, costBasisPerShare: -1 };
+  for (let i = 0; i < headerRow.length; i++) {
+    const h = headerRow[i].trim().toLowerCase();
+    if (h === 'ticker' || h === 'symbol')                                       map.ticker = i;
+    if (h === 'shares' || h === 'quantity')                                     map.shares = i;
+    if (h === 'security name' || h === 'description' || h === 'investment name') map.securityName = i;
+    if (h === 'cost basis' || h === 'total cost')                               map.costBasis = i;
+    if (h === 'average cost' || h === 'avg cost' || h === 'cost/share')         map.costBasisPerShare = i;
+  }
+  if (map.ticker === -1) return { error: 'Could not detect a "Ticker" or "Symbol" column from headers.' };
+  if (map.shares === -1) return { error: 'Could not detect a "Shares" or "Quantity" column from headers.' };
+  return map;
+}
+
+// ── Validation ───────────────────────────────────
+function validateHoldingsImport(rows, headerMap) {
+  const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const lineNum = i + 1;
+    const tickerRaw = row[headerMap.ticker];
+    if (!tickerRaw || !String(tickerRaw).trim()) {
+      errors.push(`Row ${lineNum}: ticker is blank.`);
+      continue;
+    }
+    const sharesRaw = row[headerMap.shares];
+    if (sharesRaw === undefined || sharesRaw === null || String(sharesRaw).trim() === '') {
+      errors.push(`Row ${lineNum}: shares is blank.`);
+      continue;
+    }
+    const sharesNum = parseFloat(String(sharesRaw).replace(/[$,]/g, ''));
+    if (isNaN(sharesNum) || sharesNum <= 0) {
+      errors.push(`Row ${lineNum}: shares must be a positive number (got "${sharesRaw}").`);
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+// ── Parse a single holding from a CSV row ────────
+function parseHolding(fields, headerMap, accountKey) {
+  const ticker = String(fields[headerMap.ticker]).trim().toUpperCase();
+  const shares = parseFloat(String(fields[headerMap.shares]).replace(/[$,\s]/g, ''));
+
+  let securityName = '';
+  if (headerMap.securityName >= 0 && fields[headerMap.securityName] != null) {
+    securityName = String(fields[headerMap.securityName]).trim();
+  }
+
+  let costBasis = 0;
+  if (headerMap.costBasis >= 0 && fields[headerMap.costBasis] != null) {
+    const v = parseFloat(String(fields[headerMap.costBasis]).replace(/[$,\s]/g, ''));
+    if (!isNaN(v)) costBasis = v;
+  } else if (headerMap.costBasisPerShare >= 0 && fields[headerMap.costBasisPerShare] != null) {
+    const v = parseFloat(String(fields[headerMap.costBasisPerShare]).replace(/[$,\s]/g, ''));
+    if (!isNaN(v)) costBasis = v * shares;
+  }
+
+  return { id: crypto.randomUUID(), accountKey, ticker, securityName, shares, costBasis };
+}
+
+// ── Replace all holdings for an account ─────────
+function replaceHoldings(existing, incoming, accountKey) {
+  return [...existing.filter(h => h.accountKey !== accountKey), ...incoming];
+}
+
+// ── Tracked tickers ──────────────────────────────
+function getTrackedTickers(holdings) {
+  return [...new Set(holdings.map(h => h.ticker))].sort();
+}
+
+// ── Portfolio computation ────────────────────────
+function computePortfolioValue(holdings, priceMap) {
+  return holdings.map(h => {
+    const price = (priceMap && priceMap[h.ticker] != null) ? priceMap[h.ticker] : null;
+    const value = price !== null ? +(price * h.shares).toFixed(4) : null;
+    const gain  = (value !== null) ? +(value - h.costBasis).toFixed(4) : null;
+    const gainPct = (gain !== null && h.costBasis > 0) ? +((gain / h.costBasis) * 100).toFixed(4) : null;
+    return { accountKey: h.accountKey, ticker: h.ticker, securityName: h.securityName, shares: h.shares, costBasis: h.costBasis, price, value, gain, gainPct };
+  });
+}
+
+function computeAccountTotals(positions) {
+  const totals = {};
+  for (const p of positions) {
+    if (!totals[p.accountKey]) totals[p.accountKey] = { value: 0, costBasis: 0 };
+    if (p.value !== null) totals[p.accountKey].value += p.value;
+    totals[p.accountKey].costBasis += p.costBasis;
+  }
+  return totals;
+}
+
+function computeNetworth(positions) {
+  return positions.reduce((sum, p) => sum + (p.value !== null ? p.value : 0), 0);
+}
+
+function buildNetworthSnapshot(accountTotals, date) {
+  let totalValue = 0, totalCostBasis = 0;
+  for (const key of Object.keys(accountTotals)) {
+    totalValue    += accountTotals[key].value;
+    totalCostBasis += accountTotals[key].costBasis;
+  }
+  return { id: crypto.randomUUID(), date, accounts: accountTotals, totalValue, totalCostBasis };
+}
+
+// ── Formatting ───────────────────────────────────
+function formatAccountKey(name, last4) { return `${name} *${last4}`; }
+
+function fmtCurrency(n) {
+  if (n == null) return '—';
+  const abs = Math.abs(n);
+  const s = abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return n < 0 ? `-$${s}` : `$${s}`;
+}
+
+function fmtPercent(n) {
+  if (n == null) return '—';
+  const sign = n >= 0 ? '+' : '';
+  return `${sign}${n.toFixed(2)}%`;
+}
+
+function fmtShares(n) {
+  if (n == null) return '—';
+  return parseFloat(n.toFixed(6)).toString();
+}
+
+// ── Settings helpers ─────────────────────────────
+function isValidLast4(val) {
+  return typeof val === 'string' && /^\d{4}$/.test(val);
+}
+
+function exportAccountsJSON(accounts) {
+  return JSON.stringify(accounts);
+}
+
+function importAccountsJSON(jsonString) {
+  let parsed;
+  try { parsed = JSON.parse(jsonString); } catch (e) { return { ok: false, error: 'Invalid JSON: ' + e.message }; }
+  if (!Array.isArray(parsed)) return { ok: false, error: 'Expected a JSON array of accounts.' };
+  for (let i = 0; i < parsed.length; i++) {
+    const a = parsed[i];
+    if (typeof a.name !== 'string' || !a.name) return { ok: false, error: `Account at index ${i} is missing a valid "name".` };
+    if (!isValidLast4(a.last4)) return { ok: false, error: `Account at index ${i}: "last4" must be exactly 4 digits.` };
+    if (!Array.isArray(a.inputCsvFormat)) return { ok: false, error: `Account at index ${i} is missing a valid "inputCsvFormat" array.` };
+  }
+  return { ok: true, accounts: parsed };
+}
+
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+const state = {
+  holdings: [],
+  currentPrices: null,       // { fetchedAt: 'YYYY-MM-DD', prices: { TICKER: price } }
+  networthSnapshots: [],
+  userConfig: { accounts: [] },
+
+  // pending prices being edited in Prices view (not yet saved)
+  pendingPrices: {},
+};
+
+// ══════════════════════════════════════════════════
+//  PERSISTENCE
+// ══════════════════════════════════════════════════
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem('investmentTrackerConfig');
+    if (raw) state.userConfig = JSON.parse(raw);
+  } catch (_) {}
+}
+
+function saveConfig() {
+  localStorage.setItem('investmentTrackerConfig', JSON.stringify(state.userConfig));
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem('investmentTrackerData');
+    if (raw) {
+      const d = JSON.parse(raw);
+      state.holdings = d.holdings || [];
+      state.currentPrices = d.currentPrices || null;
+      state.networthSnapshots = d.networthSnapshots || [];
+    }
+  } catch (_) {}
+}
+
+function saveData() {
+  localStorage.setItem('investmentTrackerData', JSON.stringify({
+    holdings: state.holdings,
+    currentPrices: state.currentPrices,
+    networthSnapshots: state.networthSnapshots,
+  }));
+}
+
+// ══════════════════════════════════════════════════
+//  NAV / VIEW SWITCHING
+// ══════════════════════════════════════════════════
+document.querySelectorAll('nav button[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button[data-view]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    renderView(btn.dataset.view);
+  });
+});
+
+function renderView(id) {
+  if (id === 'upload')    renderUploadView();
+  if (id === 'portfolio') renderPortfolioView();
+  if (id === 'prices')    renderPricesView();
+  if (id === 'history')   renderHistoryView();
+  if (id === 'settings')  renderSettingsView();
+}
+
+// ══════════════════════════════════════════════════
+//  UPLOAD VIEW
+// ══════════════════════════════════════════════════
+function renderUploadView() {
+  const accounts = state.userConfig.accounts;
+  const noAccts = document.getElementById('upload-no-accounts');
+  const acctWrap = document.getElementById('upload-acct-wrap');
+  const csvCard = document.getElementById('upload-csv-card');
+
+  if (accounts.length === 0) {
+    noAccts.style.display = '';
+    acctWrap.style.display = 'none';
+    csvCard.style.display = 'none';
+  } else {
+    noAccts.style.display = 'none';
+    acctWrap.style.display = '';
+    const sel = document.getElementById('upload-acct-select');
+    const prevVal = sel.value;
+    sel.innerHTML = '<option value="">— select account —</option>';
+    accounts.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = formatAccountKey(a.name, a.last4);
+      sel.appendChild(opt);
+    });
+    if (prevVal) sel.value = prevVal;
+    csvCard.style.display = sel.value ? '' : 'none';
+  }
+
+  renderHoldingsTable();
+}
+
+document.getElementById('upload-acct-select').addEventListener('change', function () {
+  document.getElementById('upload-csv-card').style.display = this.value ? '' : 'none';
+  document.getElementById('upload-error').style.display = 'none';
+  document.getElementById('upload-success').style.display = 'none';
+});
+
+document.getElementById('goto-settings-link').addEventListener('click', e => {
+  e.preventDefault();
+  document.querySelector('nav button[data-view="settings"]').click();
+});
+
+document.getElementById('upload-file').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  document.getElementById('upload-file-name').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = ev => { document.getElementById('upload-csv').value = ev.target.result; };
+  reader.readAsText(file);
+});
+
+document.getElementById('upload-import-btn').addEventListener('click', () => {
+  const acctId = document.getElementById('upload-acct-select').value;
+  if (!acctId) return;
+  const account = state.userConfig.accounts.find(a => a.id === acctId);
+  if (!account) return;
+
+  const raw = document.getElementById('upload-csv').value.trim();
+  const errEl = document.getElementById('upload-error');
+  const okEl  = document.getElementById('upload-success');
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  if (!raw) { showError(errEl, 'Please paste or select a CSV file.'); return; }
+
+  const rows = parseCSV(raw);
+  if (rows.length === 0) { showError(errEl, 'No data found in the CSV.'); return; }
+
+  const accountKey = formatAccountKey(account.name, account.last4);
+  const headerMap  = buildHoldingsHeaderMap(rows[0], account.inputCsvFormat);
+  if (headerMap.error) { showError(errEl, headerMap.error); return; }
+
+  // Detect and skip header row in positional mode: skip first row only if its
+  // shares column is non-numeric (i.e. it looks like a label row, not data).
+  let dataRows = rows;
+  if (account.inputCsvFormat) {
+    const first = rows[0];
+    const sharesVal = first[headerMap.shares];
+    const sharesNum = parseFloat(String(sharesVal || '').replace(/[$,]/g, ''));
+    if (isNaN(sharesNum) || sharesNum <= 0) {
+      dataRows = rows.slice(1);
+    }
+  } else {
+    dataRows = rows.slice(1); // first row is header in name-fallback mode
+  }
+
+  if (dataRows.length === 0) { showError(errEl, 'No data rows found (only a header?).'); return; }
+
+  const { valid, errors } = validateHoldingsImport(dataRows, headerMap);
+  if (!valid) { showError(errEl, 'Validation errors:\n' + errors.join('\n')); return; }
+
+  const incoming = dataRows.map(r => parseHolding(r, headerMap, accountKey));
+  state.holdings = replaceHoldings(state.holdings, incoming, accountKey);
+  saveData();
+
+  okEl.textContent = `Imported ${incoming.length} holding(s) for ${accountKey}. Previous holdings for this account have been replaced.`;
+  okEl.style.display = '';
+  document.getElementById('upload-csv').value = '';
+  document.getElementById('upload-file-name').textContent = '';
+  document.getElementById('upload-file').value = '';
+
+  renderHoldingsTable();
+});
+
+function renderHoldingsTable() {
+  const holdings = state.holdings;
+  const emptyEl  = document.getElementById('upload-empty');
+  const tableWrap = document.getElementById('upload-table-wrap');
+  const chipsEl  = document.getElementById('upload-accounts-chips');
+  const countEl  = document.getElementById('upload-holdings-count');
+
+  if (holdings.length === 0) {
+    emptyEl.style.display = '';
+    tableWrap.style.display = 'none';
+    chipsEl.style.display = 'none';
+    countEl.textContent = '';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  tableWrap.style.display = '';
+  chipsEl.style.display = '';
+  countEl.textContent = `${holdings.length} position${holdings.length !== 1 ? 's' : ''}`;
+
+  // Account chips
+  const byAccount = {};
+  holdings.forEach(h => { byAccount[h.accountKey] = (byAccount[h.accountKey] || 0) + 1; });
+  chipsEl.innerHTML = Object.entries(byAccount).map(([key, n]) =>
+    `<div class="account-chip">${key}<span>${n}</span></div>`
+  ).join('');
+
+  // Table rows
+  const tbody = document.getElementById('upload-holdings-tbody');
+  tbody.innerHTML = holdings.map(h => {
+    const cps = h.shares > 0 && h.costBasis > 0 ? fmtCurrency(h.costBasis / h.shares) : '—';
+    return `<tr>
+      <td>${h.accountKey}</td>
+      <td><strong>${h.ticker}</strong></td>
+      <td style="color:#555;">${h.securityName || '—'}</td>
+      <td class="td-num">${fmtShares(h.shares)}</td>
+      <td class="td-num">${fmtCurrency(h.costBasis || null)}</td>
+      <td class="td-num">${cps}</td>
+    </tr>`;
+  }).join('');
+}
+
+function showError(el, msg) {
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+// ══════════════════════════════════════════════════
+//  PORTFOLIO VIEW
+// ══════════════════════════════════════════════════
+function renderPortfolioView() {
+  const holdings = state.holdings;
+  const prices   = state.currentPrices;
+
+  document.getElementById('port-no-holdings').style.display = holdings.length === 0 ? '' : 'none';
+  document.getElementById('port-no-prices').style.display   = (!prices || Object.keys(prices.prices).length === 0) ? '' : 'none';
+
+  if (holdings.length === 0) {
+    document.getElementById('port-table-wrap').style.display = 'none';
+    document.getElementById('port-empty').style.display = '';
+    document.getElementById('port-snapshot-btn').disabled = true;
+    updatePortfolioBanner(null, null, null, null);
+    return;
+  }
+
+  const priceMap = prices ? prices.prices : {};
+  if (prices) {
+    document.getElementById('port-prices-date').textContent = `Prices from ${prices.fetchedAt}`;
+  } else {
+    document.getElementById('port-prices-date').textContent = '';
+  }
+
+  const positions = computePortfolioValue(holdings, priceMap);
+  const networth  = computeNetworth(positions);
+  const totalCost = positions.reduce((s, p) => s + p.costBasis, 0);
+  const totalGain = positions.some(p => p.value !== null) ? networth - totalCost : null;
+  const returnPct = (totalGain !== null && totalCost > 0) ? (totalGain / totalCost) * 100 : null;
+
+  updatePortfolioBanner(networth > 0 ? networth : null, totalCost, totalGain, returnPct);
+
+  // Enable save snapshot only when we have prices
+  document.getElementById('port-snapshot-btn').disabled = !prices || positions.every(p => p.value === null);
+
+  document.getElementById('port-table-wrap').style.display = '';
+  document.getElementById('port-empty').style.display = 'none';
+
+  // Group by account
+  const accountKeys = [...new Set(positions.map(p => p.accountKey))];
+  let html = '';
+  for (const key of accountKeys) {
+    const acctPositions = positions.filter(p => p.accountKey === key);
+    const acctValue = acctPositions.reduce((s, p) => s + (p.value || 0), 0);
+    const acctCost  = acctPositions.reduce((s, p) => s + p.costBasis, 0);
+    const acctGain  = acctPositions.some(p => p.value !== null) ? acctValue - acctCost : null;
+    const acctPct   = (acctGain !== null && acctCost > 0) ? (acctGain / acctCost) * 100 : null;
+
+    html += `<tr class="acct-row">
+      <td colspan="5">${key}</td>
+      <td class="td-num">${fmtCurrency(acctValue || null)}</td>
+      <td class="td-num">${fmtCurrency(acctCost)}</td>
+      <td class="td-gain ${gainClass(acctGain)}">${fmtCurrency(acctGain)}</td>
+      <td class="td-gain ${gainClass(acctPct)}">${fmtPercent(acctPct)}</td>
+    </tr>`;
+
+    html += acctPositions.map(p => `<tr>
+      <td></td>
+      <td><strong>${p.ticker}</strong></td>
+      <td style="color:#555;">${p.securityName || '—'}</td>
+      <td class="td-num">${fmtShares(p.shares)}</td>
+      <td class="td-num">${p.price != null ? fmtCurrency(p.price) : '—'}</td>
+      <td class="td-num">${fmtCurrency(p.value)}</td>
+      <td class="td-num">${fmtCurrency(p.costBasis || null)}</td>
+      <td class="td-gain ${gainClass(p.gain)}">${fmtCurrency(p.gain)}</td>
+      <td class="td-gain ${gainClass(p.gainPct)}">${fmtPercent(p.gainPct)}</td>
+    </tr>`).join('');
+  }
+
+  // Grand total row
+  html += `<tr class="total-row">
+    <td colspan="5">TOTAL</td>
+    <td class="td-num">${fmtCurrency(networth || null)}</td>
+    <td class="td-num">${fmtCurrency(totalCost)}</td>
+    <td class="td-gain ${gainClass(totalGain)}">${fmtCurrency(totalGain)}</td>
+    <td class="td-gain ${gainClass(returnPct)}">${fmtPercent(returnPct)}</td>
+  </tr>`;
+
+  document.getElementById('port-tbody').innerHTML = html;
+}
+
+function gainClass(n) {
+  if (n == null) return '';
+  return n >= 0 ? 'gain-pos' : 'gain-neg';
+}
+
+function updatePortfolioBanner(value, costBasis, gain, pct) {
+  document.getElementById('port-total-value').textContent  = fmtCurrency(value);
+  document.getElementById('port-cost-basis').textContent   = fmtCurrency(costBasis);
+  const gainEl = document.getElementById('port-gain');
+  gainEl.textContent = fmtCurrency(gain);
+  gainEl.className = 'stat-value ' + gainClass(gain);
+  const pctEl = document.getElementById('port-return-pct');
+  pctEl.textContent = fmtPercent(pct);
+  pctEl.className = 'stat-value ' + gainClass(pct);
+}
+
+document.getElementById('port-snapshot-btn').addEventListener('click', () => {
+  const priceMap  = state.currentPrices ? state.currentPrices.prices : {};
+  const positions = computePortfolioValue(state.holdings, priceMap);
+  const totals    = computeAccountTotals(positions);
+  const today     = new Date().toISOString().slice(0, 10);
+  const snapshot  = buildNetworthSnapshot(totals, today);
+  state.networthSnapshots.push(snapshot);
+  saveData();
+
+  const btn = document.getElementById('port-snapshot-btn');
+  btn.textContent = 'Saved!';
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = 'Save Snapshot'; btn.disabled = false; }, 2000);
+});
+
+// ══════════════════════════════════════════════════
+//  PRICES VIEW
+// ══════════════════════════════════════════════════
+function renderPricesView() {
+  const tickers = getTrackedTickers(state.holdings);
+  const noTickersEl = document.getElementById('prices-no-tickers');
+  const tableWrap   = document.getElementById('prices-table-wrap');
+
+  if (tickers.length === 0) {
+    noTickersEl.style.display = '';
+    tableWrap.style.display   = 'none';
+    document.getElementById('prices-fetch-btn').disabled = true;
+    return;
+  }
+
+  noTickersEl.style.display = 'none';
+  tableWrap.style.display   = '';
+  document.getElementById('prices-fetch-btn').disabled = false;
+
+  // Update "last fetched" label
+  if (state.currentPrices) {
+    document.getElementById('prices-last-fetched').textContent = `Last saved: ${state.currentPrices.fetchedAt}`;
+  } else {
+    document.getElementById('prices-last-fetched').textContent = 'No prices saved yet.';
+  }
+
+  // Populate pending prices from saved prices, then pending edits
+  tickers.forEach(t => {
+    if (state.pendingPrices[t] == null && state.currentPrices && state.currentPrices.prices[t] != null) {
+      state.pendingPrices[t] = state.currentPrices.prices[t];
+    }
+  });
+
+  renderPricesTable(tickers);
+}
+
+function renderPricesTable(tickers) {
+  const tbody = document.getElementById('prices-tbody');
+  tbody.innerHTML = tickers.map(t => {
+    const val = state.pendingPrices[t] != null ? state.pendingPrices[t] : '';
+    return `<tr>
+      <td><strong>${t}</strong></td>
+      <td><input type="number" class="prices-price-input" data-ticker="${t}" value="${val}" min="0" step="0.01" placeholder="0.00"></td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.prices-price-input').forEach(inp => {
+    inp.addEventListener('input', function () {
+      const v = parseFloat(this.value);
+      state.pendingPrices[this.dataset.ticker] = isNaN(v) ? null : v;
+    });
+  });
+}
+
+document.getElementById('prices-fetch-btn').addEventListener('click', async () => {
+  const tickers = getTrackedTickers(state.holdings);
+  if (tickers.length === 0) return;
+
+  const spinnerEl = document.getElementById('prices-spinner');
+  const errEl     = document.getElementById('prices-error');
+  const okEl      = document.getElementById('prices-success');
+  spinnerEl.style.display = '';
+  errEl.style.display     = 'none';
+  okEl.style.display      = 'none';
+  document.getElementById('prices-fetch-btn').disabled = true;
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers.join(',')}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    const results = (json.quoteResponse && json.quoteResponse.result) || [];
+    let fetched = 0;
+    results.forEach(r => {
+      if (r.regularMarketPrice != null) {
+        state.pendingPrices[r.symbol] = r.regularMarketPrice;
+        fetched++;
+      }
+    });
+    if (fetched === 0) throw new Error('No prices returned. Yahoo Finance may be unavailable or require authentication.');
+    okEl.textContent = `Fetched prices for ${fetched} of ${tickers.length} ticker(s). Review and click Save Prices.`;
+    okEl.style.display = '';
+    renderPricesTable(tickers);
+  } catch (err) {
+    errEl.innerHTML = `Could not fetch from Yahoo Finance: <strong>${err.message}</strong><br>
+      You can enter prices manually below, or import a two-column CSV (Ticker,Price).`;
+    errEl.style.display = '';
+  } finally {
+    spinnerEl.style.display = 'none';
+    document.getElementById('prices-fetch-btn').disabled = false;
+  }
+});
+
+document.getElementById('prices-file').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const errEl = document.getElementById('prices-error');
+    const okEl  = document.getElementById('prices-success');
+    errEl.style.display = 'none';
+    okEl.style.display  = 'none';
+    try {
+      const rows = parseCSV(ev.target.result);
+      let imported = 0;
+      for (const row of rows) {
+        if (!row[0] || !row[1]) continue;
+        const ticker = row[0].trim().toUpperCase();
+        const price  = parseFloat(String(row[1]).replace(/[$,]/g, ''));
+        if (ticker && !isNaN(price) && price > 0) { state.pendingPrices[ticker] = price; imported++; }
+      }
+      if (imported === 0) { showError(errEl, 'No valid Ticker,Price rows found in the CSV.'); return; }
+      okEl.textContent = `Loaded ${imported} price(s) from CSV. Review and click Save Prices.`;
+      okEl.style.display = '';
+      const tickers = getTrackedTickers(state.holdings);
+      renderPricesTable(tickers);
+    } catch (e) {
+      showError(errEl, 'Could not parse CSV: ' + e.message);
+    }
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+document.getElementById('prices-save-btn').addEventListener('click', () => {
+  const errEl = document.getElementById('prices-error');
+  const okEl  = document.getElementById('prices-success');
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  const prices = {};
+  let count = 0;
+  for (const [t, v] of Object.entries(state.pendingPrices)) {
+    if (v != null && v > 0) { prices[t] = v; count++; }
+  }
+  if (count === 0) { showError(errEl, 'No valid prices to save. Enter at least one price.'); return; }
+
+  const today = new Date().toISOString().slice(0, 10);
+  state.currentPrices = { fetchedAt: today, prices };
+  saveData();
+
+  document.getElementById('prices-last-fetched').textContent = `Last saved: ${today}`;
+  okEl.textContent = `Saved ${count} price(s).`;
+  okEl.style.display = '';
+});
+
+// ══════════════════════════════════════════════════
+//  HISTORY VIEW
+// ══════════════════════════════════════════════════
+function renderHistoryView() {
+  const snaps = [...state.networthSnapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const emptyEl = document.getElementById('history-empty');
+  const mainEl  = document.getElementById('history-main');
+
+  if (snaps.length === 0) {
+    emptyEl.style.display = '';
+    mainEl.style.display  = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  mainEl.style.display  = '';
+
+  // SVG sparkline
+  document.getElementById('history-chart').innerHTML = buildSparkline(snaps);
+
+  // Table
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = snaps.map((s, i) => {
+    const gain    = s.totalValue - s.totalCostBasis;
+    const pct     = s.totalCostBasis > 0 ? (gain / s.totalCostBasis) * 100 : null;
+    const prevVal = i > 0 ? snaps[i - 1].totalValue : null;
+    const delta   = prevVal != null ? s.totalValue - prevVal : null;
+    return `<tr>
+      <td>${s.date}</td>
+      <td class="td-num">${fmtCurrency(s.totalValue)}</td>
+      <td class="td-num">${fmtCurrency(s.totalCostBasis)}</td>
+      <td class="td-gain ${gainClass(gain)}">${fmtCurrency(gain)}</td>
+      <td class="td-gain ${gainClass(pct)}">${fmtPercent(pct)}</td>
+      <td>
+        <button class="btn-secondary btn-sm" onclick="deleteSnapshot('${s.id}')" title="Delete snapshot" style="color:#c62828;border-color:#f5c6cb;">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteSnapshot(id) {
+  if (!confirm('Delete this snapshot?')) return;
+  state.networthSnapshots = state.networthSnapshots.filter(s => s.id !== id);
+  saveData();
+  renderHistoryView();
+}
+
+function buildSparkline(snaps) {
+  if (snaps.length < 2) {
+    const s = snaps[0];
+    const gain = s.totalValue - s.totalCostBasis;
+    return `<div style="font-size:13px;color:#555;">Only one snapshot — ${s.date}: ${fmtCurrency(s.totalValue)} (${fmtPercent(s.totalCostBasis > 0 ? (gain/s.totalCostBasis)*100 : null)})</div>`;
+  }
+
+  const W = 600, H = 100, PAD_X = 60, PAD_Y = 16;
+  const values = snaps.map(s => s.totalValue);
+  const minV   = Math.min(...values);
+  const maxV   = Math.max(...values);
+  const range  = maxV - minV || 1;
+  const innerW = W - PAD_X * 2;
+  const innerH = H - PAD_Y * 2;
+
+  const pts = values.map((v, i) => {
+    const x = PAD_X + (i / (values.length - 1)) * innerW;
+    const y = PAD_Y + innerH - ((v - minV) / range) * innerH;
+    return [x, y];
+  });
+
+  const polyline = pts.map(p => p.join(',')).join(' ');
+  const area = `${pts.map(p => p.join(',')).join(' ')} ${pts[pts.length-1][0]},${PAD_Y+innerH} ${pts[0][0]},${PAD_Y+innerH}`;
+
+  const labels = snaps.map((s, i) => {
+    if (i !== 0 && i !== snaps.length - 1 && snaps.length > 4 && i % Math.ceil((snaps.length-1)/3) !== 0) return '';
+    const [x, y] = pts[i];
+    return `<text x="${x}" y="${H - 2}" text-anchor="middle" font-size="9" fill="#888">${s.date.slice(5)}</text>`;
+  }).join('');
+
+  const yLabels = [minV, maxV].map((v, i) => {
+    const y = i === 0 ? PAD_Y + innerH : PAD_Y;
+    return `<text x="${PAD_X - 4}" y="${y + 3}" text-anchor="end" font-size="9" fill="#888">${fmtCurrency(v)}</text>`;
+  }).join('');
+
+  const dots = pts.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#2e7d32" title="${snaps[i].date}: ${fmtCurrency(snaps[i].totalValue)}"/>`).join('');
+
+  return `<svg width="100%" viewBox="0 0 ${W} ${H+14}" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="${area}" fill="#e8f5e9" opacity="0.7"/>
+    <polyline points="${polyline}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}
+    ${yLabels}
+    ${labels}
+  </svg>`;
+}
+
+// ══════════════════════════════════════════════════
+//  SETTINGS VIEW
+// ══════════════════════════════════════════════════
+let editingAccountId = null;
+
+function renderSettingsView() {
+  const accounts = state.userConfig.accounts;
+  const emptyEl  = document.getElementById('settings-empty');
+  const tableEl  = document.getElementById('settings-table');
+
+  if (accounts.length === 0) {
+    emptyEl.style.display = '';
+    tableEl.style.display = 'none';
+  } else {
+    emptyEl.style.display = 'none';
+    tableEl.style.display = '';
+    document.getElementById('settings-tbody').innerHTML = accounts.map(a => {
+      const mapped = a.inputCsvFormat.filter(f => f !== null).length;
+      return `<tr>
+        <td><strong>${a.name}</strong></td>
+        <td>${a.last4}</td>
+        <td>${mapped} column${mapped !== 1 ? 's' : ''}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn-secondary btn-sm" onclick="editAccount('${a.id}')">Edit</button>
+          <button class="btn-secondary btn-sm" onclick="deleteAccount('${a.id}')" style="margin-left:4px;color:#c62828;">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+document.getElementById('settings-add-btn').addEventListener('click', () => {
+  editingAccountId = null;
+  document.getElementById('settings-form-title').textContent = 'Add Account';
+  document.getElementById('sf-name').value        = '';
+  document.getElementById('sf-last4').value       = '';
+  document.getElementById('sf-format-input').value = '';
+  document.getElementById('sf-form-error').style.display = 'none';
+  document.getElementById('settings-form-card').style.display = '';
+  document.getElementById('sf-name').focus();
+});
+
+function editAccount(id) {
+  const a = state.userConfig.accounts.find(a => a.id === id);
+  if (!a) return;
+  editingAccountId = id;
+  document.getElementById('settings-form-title').textContent = 'Edit Account';
+  document.getElementById('sf-name').value         = a.name;
+  document.getElementById('sf-last4').value        = a.last4;
+  document.getElementById('sf-format-input').value = JSON.stringify(a.inputCsvFormat);
+  document.getElementById('sf-form-error').style.display = 'none';
+  document.getElementById('settings-form-card').style.display = '';
+  document.getElementById('sf-name').focus();
+}
+
+function deleteAccount(id) {
+  if (!confirm('Delete this account profile? Holdings for this account will not be removed.')) return;
+  state.userConfig.accounts = state.userConfig.accounts.filter(a => a.id !== id);
+  saveConfig();
+  renderSettingsView();
+  renderUploadView();
+}
+
+document.getElementById('sf-cancel-btn').addEventListener('click', () => {
+  document.getElementById('settings-form-card').style.display = 'none';
+  editingAccountId = null;
+});
+
+document.getElementById('sf-save-btn').addEventListener('click', () => {
+  const name       = document.getElementById('sf-name').value.trim();
+  const last4      = document.getElementById('sf-last4').value.trim();
+  const formatRaw  = document.getElementById('sf-format-input').value.trim();
+  const errEl      = document.getElementById('sf-form-error');
+  errEl.style.display = 'none';
+
+  if (!name)          { showError(errEl, 'Account name is required.'); return; }
+  if (!isValidLast4(last4)) { showError(errEl, 'Last 4 digits must be exactly 4 numeric digits.'); return; }
+
+  let fmt;
+  try { fmt = JSON.parse(formatRaw); } catch (_) { showError(errEl, 'Column format is not valid JSON.'); return; }
+  if (!Array.isArray(fmt)) { showError(errEl, 'Column format must be a JSON array.'); return; }
+
+  const test = buildHoldingsHeaderMap([], fmt);
+  if (test.error) { showError(errEl, test.error); return; }
+
+  if (editingAccountId) {
+    const acct = state.userConfig.accounts.find(a => a.id === editingAccountId);
+    if (acct) { acct.name = name; acct.last4 = last4; acct.inputCsvFormat = fmt; }
+  } else {
+    state.userConfig.accounts.push({ id: crypto.randomUUID(), name, last4, inputCsvFormat: fmt });
+  }
+
+  saveConfig();
+  editingAccountId = null;
+  document.getElementById('settings-form-card').style.display = 'none';
+  renderSettingsView();
+  renderUploadView();
+});
+
+document.getElementById('settings-export-btn').addEventListener('click', () => {
+  const section = document.getElementById('settings-export-section');
+  section.style.display = '';
+  const json = exportAccountsJSON(state.userConfig.accounts);
+  document.getElementById('settings-export-field').value = json;
+  document.getElementById('settings-export-pretty').textContent = JSON.stringify(JSON.parse(json), null, 2);
+});
+
+document.getElementById('settings-import-btn').addEventListener('click', () => {
+  const raw    = document.getElementById('settings-import-field').value.trim();
+  const errEl  = document.getElementById('settings-import-error');
+  errEl.style.display = 'none';
+  if (!raw) { showError(errEl, 'Paste a JSON configuration first.'); return; }
+  const result = importAccountsJSON(raw);
+  if (!result.ok) { showError(errEl, result.error); return; }
+  state.userConfig.accounts = result.accounts;
+  saveConfig();
+  document.getElementById('settings-import-field').value = '';
+  renderSettingsView();
+  renderUploadView();
+});
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+loadConfig();
+loadData();
+renderUploadView();
+
+// ══════════════════════════════════════════════════
+//  EXPOSE PURE FUNCTIONS FOR TESTS
+// ══════════════════════════════════════════════════
+window.__investmentLib = {
+  parseCSV, parseCSVLine,
+  buildHoldingsHeaderMap, validateHoldingsImport, parseHolding,
+  replaceHoldings, getTrackedTickers,
+  computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
+  formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
+  fmtCurrency, fmtPercent, fmtShares,
+};
+</script>
+</body>
+</html>
