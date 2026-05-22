@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { VANGUARD_ACCOUNT, VANGUARD_CSV, INVALID_CSV, seedAccounts, goToView } = require('./seed');
+const { VANGUARD_ACCOUNT, ROBINHOOD_ACCOUNT, VANGUARD_CSV, ROBINHOOD_CSV, INVALID_CSV, seedAccounts, seedHoldings, goToView } = require('./seed');
 
 test.describe('Holdings Upload', () => {
   test('given a configured account, when a valid CSV is pasted and imported, holdings appear in the table', async ({ page }) => {
@@ -56,5 +56,38 @@ test.describe('Holdings Upload', () => {
     // Should now have 1 row (replaced)
     await expect(page.locator('#upload-holdings-tbody tr')).toHaveCount(1);
     await expect(page.locator('#upload-holdings-tbody')).toContainText('200');
+  });
+
+  test('Clear All removes all holdings and shows empty state', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+    ]);
+    await page.goto('index.html');
+    await goToView(page, 'upload');
+
+    page.on('dialog', d => d.accept());
+    await page.click('#upload-clear-all-btn');
+
+    await expect(page.locator('#upload-empty')).toBeVisible();
+    await expect(page.locator('#upload-clear-all-btn')).not.toBeVisible();
+  });
+
+  test('per-account clear button removes only that account\'s holdings', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT, ROBINHOOD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+      { id: 'h2', accountKey: 'Robinhood *5678', ticker: 'AAPL', securityName: '', shares: 10, costBasis: 1500 },
+    ]);
+    await page.goto('index.html');
+    await goToView(page, 'upload');
+
+    page.on('dialog', d => d.accept());
+    // Click the × on the Vanguard chip
+    await page.locator('.account-chip', { hasText: 'Vanguard *1234' }).locator('button').click();
+
+    // Vanguard gone, Robinhood remains
+    await expect(page.locator('#upload-holdings-tbody')).not.toContainText('VTI');
+    await expect(page.locator('#upload-holdings-tbody')).toContainText('AAPL');
   });
 });
