@@ -388,6 +388,7 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <label for="prices-file" class="btn btn-primary btn-sm" style="cursor:pointer;margin:0;">Import CSV</label>
           <input type="file" id="prices-file" accept=".csv,.txt" style="display:none;">
+          <button class="btn btn-primary btn-sm" id="prices-export-btn">Export Tickers</button>
           <button class="btn btn-primary btn-sm" id="prices-fetch-btn">Fetch from Yahoo Finance</button>
         </div>
       </div>
@@ -1166,6 +1167,21 @@ document.getElementById('prices-fetch-btn').addEventListener('click', async () =
     spinnerEl.style.display = 'none';
     document.getElementById('prices-fetch-btn').disabled = false;
   }
+});
+
+document.getElementById('prices-export-btn').addEventListener('click', () => {
+  const tickers = getTrackedTickers(state.holdings);
+  if (tickers.length === 0) return;
+  const savedPrices = state.currentPrices ? state.currentPrices.prices : {};
+  const csv = 'Ticker,Price\n' + tickers.map(t => {
+    const p = savedPrices[t] != null ? savedPrices[t] : '';
+    return `${t},${p}`;
+  }).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'tickers.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 });
 
 document.getElementById('prices-file').addEventListener('change', function () {
