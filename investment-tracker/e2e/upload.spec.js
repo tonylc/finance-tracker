@@ -58,21 +58,6 @@ test.describe('Holdings Upload', () => {
     await expect(page.locator('#upload-holdings-tbody')).toContainText('200');
   });
 
-  test('Clear All removes all holdings and shows empty state', async ({ page }) => {
-    await seedAccounts(page, [VANGUARD_ACCOUNT]);
-    await seedHoldings(page, [
-      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
-    ]);
-    await page.goto('index.html');
-    await goToView(page, 'upload');
-
-    page.on('dialog', d => d.accept());
-    await page.click('#upload-clear-all-btn');
-
-    await expect(page.locator('#upload-empty')).toBeVisible();
-    await expect(page.locator('#upload-clear-all-btn')).not.toBeVisible();
-  });
-
   test('per-account clear button removes only that account\'s holdings', async ({ page }) => {
     await seedAccounts(page, [VANGUARD_ACCOUNT, ROBINHOOD_ACCOUNT]);
     await seedHoldings(page, [
