@@ -22,9 +22,9 @@ test.describe('CSV Import', () => {
     await expect(page.locator('#total-tx-count')).toHaveText('2');
   });
 
-  test('given CSV with a duplicate transaction, duplicate is silently skipped and count reflects deduplicated total', async ({ page }) => {
+  test('given CSV with two identical rows, both are imported (no deduplication)', async ({ page }) => {
     await loadTransactions(page, LOAD_CSV.withDuplicate);
-    await expect(page.locator('#total-tx-count')).toHaveText('1');
+    await expect(page.locator('#total-tx-count')).toHaveText('2');
   });
 
   test('given CSV with an unparseable date, import blocked and validation error appears', async ({ page }) => {

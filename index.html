@@ -1139,7 +1139,7 @@ function handleLoadImport() {
 
   const accountKey = formatAccountKey(account.name, account.last4);
   const incoming = dataRows.map(fields => parseTransaction(fields, loadHeaderMap, accountKey));
-  state.transactions = deduplicateTransactions(state.transactions, incoming);
+  state.transactions = [...state.transactions, ...incoming];
 
   if (!state.accounts.find(a => a.key === accountKey)) {
     state.accounts.push({ key: accountKey, name: account.name, last4: account.last4 });
