@@ -65,13 +65,13 @@ test.describe('Last 4 Validation', () => {
     await openAddForm(page);
   });
 
-  test('last4 with non-digit characters shows validation error and blocks save', async ({ page }) => {
+  test('last4 with special characters shows validation error and blocks save', async ({ page }) => {
     await page.fill('#sf-name', 'Test Bank');
-    await page.fill('#sf-last4', '12ab');
+    await page.fill('#sf-last4', '12!4');
     await page.fill('#sf-format-input', '["date","description","amount"]');
     await page.click('#sf-save-btn');
     await expect(page.locator('#sf-form-error')).toBeVisible();
-    await expect(page.locator('#sf-form-error')).toContainText('4 number');
+    await expect(page.locator('#sf-form-error')).toContainText('alphanumeric');
     await expect(page.locator('#settings-form-card')).toBeVisible();
   });
 

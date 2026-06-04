@@ -331,16 +331,24 @@ function runTests() {
       assertEqual(isValidLast4('1234'), true);
     });
 
-    test('given fewer than 4 digits, returns false', () => {
+    test('given 4 letters, returns true', () => {
+      assertEqual(isValidLast4('abcd'), true);
+    });
+
+    test('given mixed letters and digits (4 chars), returns true', () => {
+      assertEqual(isValidLast4('a1b2'), true);
+    });
+
+    test('given fewer than 4 characters, returns false', () => {
       assertEqual(isValidLast4('123'), false);
     });
 
-    test('given more than 4 digits, returns false', () => {
+    test('given more than 4 characters, returns false', () => {
       assertEqual(isValidLast4('12345'), false);
     });
 
-    test('given non-digit characters, returns false', () => {
-      assertEqual(isValidLast4('12ab'), false);
+    test('given a special character, returns false', () => {
+      assertEqual(isValidLast4('12!4'), false);
     });
 
     test('given a number (not a string), returns false', () => {
@@ -434,8 +442,8 @@ function runTests() {
       assertEqual(result.ok, false);
     });
 
-    test('given last4 that contains non-digit characters, returns ok:false', () => {
-      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '12ab', inputCsvFormat: [] }]);
+    test('given last4 that contains special characters, returns ok:false', () => {
+      const input = JSON.stringify([{ id: 'x1', name: 'Chase', last4: '12!4', inputCsvFormat: [] }]);
       const result = importAccountsJSON(input);
       assertEqual(result.ok, false);
     });

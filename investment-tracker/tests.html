@@ -377,14 +377,23 @@ function runTests() {
     test('exactly 4 digits is valid', () => {
       assertEqual(isValidLast4('1234'), true);
     });
-    test('3 digits is invalid', () => {
+    test('4 letters is valid', () => {
+      assertEqual(isValidLast4('abcd'), true);
+    });
+    test('mixed letters and digits (4 chars) is valid', () => {
+      assertEqual(isValidLast4('a1b2'), true);
+    });
+    test('3 characters is invalid', () => {
       assertEqual(isValidLast4('123'), false);
     });
-    test('5 digits is invalid', () => {
+    test('5 characters is invalid', () => {
       assertEqual(isValidLast4('12345'), false);
     });
-    test('letters are invalid', () => {
-      assertEqual(isValidLast4('abcd'), false);
+    test('special character is invalid', () => {
+      assertEqual(isValidLast4('12!4'), false);
+    });
+    test('number (not a string) is invalid', () => {
+      assertEqual(isValidLast4(1234), false);
     });
   });
 

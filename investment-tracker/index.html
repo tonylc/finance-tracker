@@ -774,7 +774,7 @@ function fmtShares(n) {
 
 // ── Settings helpers ─────────────────────────────
 function isValidLast4(val) {
-  return typeof val === 'string' && /^\d{4}$/.test(val);
+  return typeof val === 'string' && /^[a-zA-Z0-9]{4}$/.test(val);
 }
 
 function exportAccountsJSON(accounts) {
@@ -788,7 +788,7 @@ function importAccountsJSON(jsonString) {
   for (let i = 0; i < parsed.length; i++) {
     const a = parsed[i];
     if (typeof a.name !== 'string' || !a.name) return { ok: false, error: `Account at index ${i} is missing a valid "name".` };
-    if (!isValidLast4(a.last4)) return { ok: false, error: `Account at index ${i}: "last4" must be exactly 4 digits.` };
+    if (!isValidLast4(a.last4)) return { ok: false, error: `Account at index ${i}: "last4" must be exactly 4 alphanumeric characters.` };
     if (!Array.isArray(a.inputCsvFormat)) return { ok: false, error: `Account at index ${i} is missing a valid "inputCsvFormat" array.` };
   }
   return { ok: true, accounts: parsed };
@@ -1503,7 +1503,7 @@ document.getElementById('sf-save-btn').addEventListener('click', () => {
   errEl.style.display = 'none';
 
   if (!name)          { showError(errEl, 'Account name is required.'); return; }
-  if (!isValidLast4(last4)) { showError(errEl, 'Last 4 digits must be exactly 4 numeric digits.'); return; }
+  if (!isValidLast4(last4)) { showError(errEl, 'Last 4 must be exactly 4 alphanumeric characters.'); return; }
 
   let fmt;
   try { fmt = JSON.parse(formatRaw); } catch (_) { showError(errEl, 'Column format is not valid JSON.'); return; }
