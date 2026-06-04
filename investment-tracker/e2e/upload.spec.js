@@ -58,6 +58,19 @@ test.describe('Holdings Upload', () => {
     await expect(page.locator('#upload-holdings-tbody')).toContainText('200');
   });
 
+  test('two holdings of the same ticker in one account are shown as a single aggregated row', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+      { id: 'h2', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 50, costBasis: 11000 },
+    ]);
+    await page.goto('index.html');
+    await goToView(page, 'upload');
+
+    await expect(page.locator('#upload-holdings-tbody tr')).toHaveCount(1);
+    await expect(page.locator('#upload-holdings-tbody')).toContainText('150');
+  });
+
   test('per-account clear button removes only that account\'s holdings', async ({ page }) => {
     await seedAccounts(page, [VANGUARD_ACCOUNT, ROBINHOOD_ACCOUNT]);
     await seedHoldings(page, [
