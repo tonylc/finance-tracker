@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { seedFullState, seedHoldings, seedAccounts, VANGUARD_ACCOUNT, goToView } = require('./seed');
+const { seedFullState, seedHoldings, seedAccounts, VANGUARD_ACCOUNT, ROBINHOOD_ACCOUNT, goToView } = require('./seed');
 
 test.describe('Portfolio View', () => {
   test('given holdings and prices, portfolio shows value and gain', async ({ page }) => {
@@ -46,5 +46,37 @@ test.describe('Portfolio View', () => {
     await goToView(page, 'history');
     await expect(page.locator('#history-tbody tr')).toHaveCount(1);
     await expect(page.locator('#history-tbody')).toContainText('32,260');
+  });
+});
+
+test.describe('Holdings Aggregation', () => {
+  test('two holdings of the same ticker in one account are merged into a single portfolio row', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: 'Vanguard Total Stock Market ETF', shares: 100, costBasis: 21500 },
+      { id: 'h2', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: 'Vanguard Total Stock Market ETF', shares: 50, costBasis: 11000 },
+    ], { fetchedAt: '2026-05-21', prices: { VTI: 285.50 } });
+    await page.goto('index.html');
+    await goToView(page, 'portfolio');
+
+    // Only one position row for VTI (branch-row and acct-row are not data rows)
+    const positionRows = page.locator('#port-tbody tr:not(.branch-row):not(.acct-row):not(.total-row)');
+    await expect(positionRows).toHaveCount(1);
+    // Aggregated shares: 100 + 50 = 150
+    await expect(page.locator('#port-tbody')).toContainText('150');
+  });
+
+  test('same ticker across different accounts appears as separate rows', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT, ROBINHOOD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+      { id: 'h2', accountKey: 'Robinhood *5678', ticker: 'VTI', securityName: '', shares: 50, costBasis: 11000 },
+    ], { fetchedAt: '2026-05-21', prices: { VTI: 285.50 } });
+    await page.goto('index.html');
+    await goToView(page, 'portfolio');
+
+    // One row per account (Vanguard has 100 shares, Robinhood has 50)
+    const positionRows = page.locator('#port-tbody tr:not(.branch-row):not(.acct-row):not(.total-row)');
+    await expect(positionRows).toHaveCount(2);
   });
 });

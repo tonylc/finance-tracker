@@ -186,7 +186,18 @@
   .flex-between { display: flex; align-items: center; justify-content: space-between; }
   .mt-16 { margin-top: 16px; }
 
-  /* ── Portfolio account group rows ── */
+  /* ── Portfolio branch / account group rows ── */
+  .portfolio-table tr.branch-row td {
+    background: #1a1a2e;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-top: 3px solid #0d0d1a;
+  }
+  .portfolio-table tr.branch-row td.gain-pos { color: #81c784; }
+  .portfolio-table tr.branch-row td.gain-neg { color: #ef9a9a; }
   .portfolio-table tr.acct-row td {
     background: #e8eaf6;
     font-weight: 700;
@@ -194,7 +205,7 @@
     text-transform: uppercase;
     letter-spacing: .4px;
     color: #333;
-    border-top: 2px solid #c5cae9;
+    border-top: 1px solid #c5cae9;
   }
   .portfolio-table tr.total-row td {
     background: #1a1a2e;
@@ -220,6 +231,16 @@
 
   /* ── History table ── */
   .history-table tr.selected-row td { background: #f0f7ff; }
+  .history-table tr.history-branch-row td {
+    background: #f9f9f9;
+    font-size: 12px;
+    color: #555;
+    border-top: none;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .history-table tr.history-branch-row td.gain-pos { color: #2e7d32; }
+  .history-table tr.history-branch-row td.gain-neg { color: #c62828; }
 
   /* ── Spinner ── */
   .spinner {
@@ -693,6 +714,43 @@ function buildNetworthSnapshot(accountTotals, date) {
   return { id: crypto.randomUUID(), date, accounts: accountTotals, totalValue, totalCostBasis };
 }
 
+// ── Aggregate duplicate tickers per account ──────
+function aggregateHoldingsByTicker(holdings) {
+  const map = new Map();
+  for (const h of holdings) {
+    const key = `${h.accountKey}|${h.ticker}`;
+    if (map.has(key)) {
+      const e = map.get(key);
+      e.shares    = +(e.shares    + h.shares).toFixed(6);
+      e.costBasis = +(e.costBasis + h.costBasis).toFixed(4);
+    } else {
+      map.set(key, { ...h });
+    }
+  }
+  return [...map.values()];
+}
+
+// ── Branch helpers ───────────────────────────────
+function getBranchFromAccountKey(accountKey, accounts) {
+  if (accounts) {
+    const match = accounts.find(a => formatAccountKey(a.name, a.last4) === accountKey);
+    if (match) return match.name;
+  }
+  const idx = accountKey.indexOf(' *');
+  return idx >= 0 ? accountKey.slice(0, idx) : accountKey;
+}
+
+function computeBranchSummary(accountTotals, accounts) {
+  const result = {};
+  for (const [key, totals] of Object.entries(accountTotals)) {
+    const branch = getBranchFromAccountKey(key, accounts);
+    if (!result[branch]) result[branch] = { value: 0, costBasis: 0 };
+    result[branch].value     += totals.value;
+    result[branch].costBasis += totals.costBasis;
+  }
+  return result;
+}
+
 // ── Formatting ───────────────────────────────────
 function formatAccountKey(name, last4) { return `${name} *${last4}`; }
 
@@ -967,13 +1025,14 @@ function showError(el, msg) {
 //  PORTFOLIO VIEW
 // ══════════════════════════════════════════════════
 function renderPortfolioView() {
-  const holdings = state.holdings;
-  const prices   = state.currentPrices;
+  const rawHoldings = state.holdings;
+  const prices      = state.currentPrices;
+  const accounts    = state.userConfig.accounts;
 
-  document.getElementById('port-no-holdings').style.display = holdings.length === 0 ? '' : 'none';
+  document.getElementById('port-no-holdings').style.display = rawHoldings.length === 0 ? '' : 'none';
   document.getElementById('port-no-prices').style.display   = (!prices || Object.keys(prices.prices).length === 0) ? '' : 'none';
 
-  if (holdings.length === 0) {
+  if (rawHoldings.length === 0) {
     document.getElementById('port-table-wrap').style.display = 'none';
     document.getElementById('port-empty').style.display = '';
     document.getElementById('port-snapshot-btn').disabled = true;
@@ -982,12 +1041,10 @@ function renderPortfolioView() {
   }
 
   const priceMap = prices ? prices.prices : {};
-  if (prices) {
-    document.getElementById('port-prices-date').textContent = `Prices from ${prices.fetchedAt}`;
-  } else {
-    document.getElementById('port-prices-date').textContent = '';
-  }
+  document.getElementById('port-prices-date').textContent = prices ? `Prices from ${prices.fetchedAt}` : '';
 
+  // Aggregate duplicate tickers before computing value
+  const holdings  = aggregateHoldingsByTicker(rawHoldings);
   const positions = computePortfolioValue(holdings, priceMap);
   const networth  = computeNetworth(positions);
   const totalCost = positions.reduce((s, p) => s + p.costBasis, 0);
@@ -995,45 +1052,64 @@ function renderPortfolioView() {
   const returnPct = (totalGain !== null && totalCost > 0) ? (totalGain / totalCost) * 100 : null;
 
   updatePortfolioBanner(networth > 0 ? networth : null, totalCost, totalGain, returnPct);
-
-  // Enable save snapshot only when we have prices
   document.getElementById('port-snapshot-btn').disabled = !prices || positions.every(p => p.value === null);
-
   document.getElementById('port-table-wrap').style.display = '';
   document.getElementById('port-empty').style.display = 'none';
 
-  // Group by account
-  const accountKeys = [...new Set(positions.map(p => p.accountKey))];
-  let html = '';
-  for (const key of accountKeys) {
-    const acctPositions = positions.filter(p => p.accountKey === key);
-    const acctValue = acctPositions.reduce((s, p) => s + (p.value || 0), 0);
-    const acctCost  = acctPositions.reduce((s, p) => s + p.costBasis, 0);
-    const acctGain  = acctPositions.some(p => p.value !== null) ? acctValue - acctCost : null;
-    const acctPct   = (acctGain !== null && acctCost > 0) ? (acctGain / acctCost) * 100 : null;
-
-    html += `<tr class="acct-row">
-      <td colspan="5">${key}</td>
-      <td class="td-num">${fmtCurrency(acctValue || null)}</td>
-      <td class="td-num">${fmtCurrency(acctCost)}</td>
-      <td class="td-gain ${gainClass(acctGain)}">${fmtCurrency(acctGain)}</td>
-      <td class="td-gain ${gainClass(acctPct)}">${fmtPercent(acctPct)}</td>
-    </tr>`;
-
-    html += acctPositions.map(p => `<tr>
-      <td></td>
-      <td><strong>${p.ticker}</strong></td>
-      <td style="color:#555;">${p.securityName || '—'}</td>
-      <td class="td-num">${fmtShares(p.shares)}</td>
-      <td class="td-num">${p.price != null ? fmtCurrency(p.price) : '—'}</td>
-      <td class="td-num">${fmtCurrency(p.value)}</td>
-      <td class="td-num">${fmtCurrency(p.costBasis || null)}</td>
-      <td class="td-gain ${gainClass(p.gain)}">${fmtCurrency(p.gain)}</td>
-      <td class="td-gain ${gainClass(p.gainPct)}">${fmtPercent(p.gainPct)}</td>
-    </tr>`).join('');
+  // Build branch → accountKey → positions map (preserving insertion order)
+  const branchMap = new Map();
+  for (const p of positions) {
+    const branch = getBranchFromAccountKey(p.accountKey, accounts);
+    if (!branchMap.has(branch)) branchMap.set(branch, new Map());
+    const acctMap = branchMap.get(branch);
+    if (!acctMap.has(p.accountKey)) acctMap.set(p.accountKey, []);
+    acctMap.get(p.accountKey).push(p);
   }
 
-  // Grand total row
+  let html = '';
+  for (const [branch, acctMap] of branchMap) {
+    const branchPos   = [...acctMap.values()].flat();
+    const branchValue = branchPos.reduce((s, p) => s + (p.value || 0), 0);
+    const branchCost  = branchPos.reduce((s, p) => s + p.costBasis, 0);
+    const branchGain  = branchPos.some(p => p.value !== null) ? branchValue - branchCost : null;
+    const branchPct   = (branchGain !== null && branchCost > 0) ? (branchGain / branchCost) * 100 : null;
+
+    html += `<tr class="branch-row">
+      <td colspan="5">${branch}</td>
+      <td class="td-num">${fmtCurrency(branchValue || null)}</td>
+      <td class="td-num">${fmtCurrency(branchCost)}</td>
+      <td class="td-gain ${gainClass(branchGain)}">${fmtCurrency(branchGain)}</td>
+      <td class="td-gain ${gainClass(branchPct)}">${fmtPercent(branchPct)}</td>
+    </tr>`;
+
+    for (const [accountKey, acctPositions] of acctMap) {
+      const acctValue = acctPositions.reduce((s, p) => s + (p.value || 0), 0);
+      const acctCost  = acctPositions.reduce((s, p) => s + p.costBasis, 0);
+      const acctGain  = acctPositions.some(p => p.value !== null) ? acctValue - acctCost : null;
+      const acctPct   = (acctGain !== null && acctCost > 0) ? (acctGain / acctCost) * 100 : null;
+
+      html += `<tr class="acct-row">
+        <td colspan="5" style="padding-left:20px;">${accountKey}</td>
+        <td class="td-num">${fmtCurrency(acctValue || null)}</td>
+        <td class="td-num">${fmtCurrency(acctCost)}</td>
+        <td class="td-gain ${gainClass(acctGain)}">${fmtCurrency(acctGain)}</td>
+        <td class="td-gain ${gainClass(acctPct)}">${fmtPercent(acctPct)}</td>
+      </tr>`;
+
+      html += acctPositions.map(p => `<tr>
+        <td></td>
+        <td style="padding-left:32px;"><strong>${p.ticker}</strong></td>
+        <td style="color:#555;">${p.securityName || '—'}</td>
+        <td class="td-num">${fmtShares(p.shares)}</td>
+        <td class="td-num">${p.price != null ? fmtCurrency(p.price) : '—'}</td>
+        <td class="td-num">${fmtCurrency(p.value)}</td>
+        <td class="td-num">${fmtCurrency(p.costBasis || null)}</td>
+        <td class="td-gain ${gainClass(p.gain)}">${fmtCurrency(p.gain)}</td>
+        <td class="td-gain ${gainClass(p.gainPct)}">${fmtPercent(p.gainPct)}</td>
+      </tr>`).join('');
+    }
+  }
+
   html += `<tr class="total-row">
     <td colspan="5">TOTAL</td>
     <td class="td-num">${fmtCurrency(networth || null)}</td>
@@ -1257,12 +1333,31 @@ function renderHistoryView() {
   document.getElementById('history-chart').innerHTML = buildSparkline(snaps);
 
   // Table
+  const accounts = state.userConfig.accounts;
   const tbody = document.getElementById('history-tbody');
   tbody.innerHTML = snaps.map((s, i) => {
     const gain    = s.totalValue - s.totalCostBasis;
     const pct     = s.totalCostBasis > 0 ? (gain / s.totalCostBasis) * 100 : null;
-    const prevVal = i > 0 ? snaps[i - 1].totalValue : null;
-    const delta   = prevVal != null ? s.totalValue - prevVal : null;
+
+    // Per-branch sub-rows (only when multiple branches exist)
+    const branchSummary  = s.accounts ? computeBranchSummary(s.accounts, accounts) : {};
+    const branchNames    = Object.keys(branchSummary);
+    const branchRows = branchNames.length > 1
+      ? branchNames.map(branch => {
+          const bt = branchSummary[branch];
+          const bg = bt.value - bt.costBasis;
+          const bp = bt.costBasis > 0 ? (bg / bt.costBasis) * 100 : null;
+          return `<tr class="history-branch-row">
+            <td style="padding-left:24px;">${branch}</td>
+            <td class="td-num">${fmtCurrency(bt.value)}</td>
+            <td class="td-num">${fmtCurrency(bt.costBasis)}</td>
+            <td class="td-gain ${gainClass(bg)}">${fmtCurrency(bg)}</td>
+            <td class="td-gain ${gainClass(bp)}">${fmtPercent(bp)}</td>
+            <td></td>
+          </tr>`;
+        }).join('')
+      : '';
+
     return `<tr>
       <td>${s.date}</td>
       <td class="td-num">${fmtCurrency(s.totalValue)}</td>
@@ -1272,7 +1367,7 @@ function renderHistoryView() {
       <td>
         <button class="btn-secondary btn-sm" onclick="deleteSnapshot('${s.id}')" title="Delete snapshot" style="color:#c62828;border-color:#f5c6cb;">✕</button>
       </td>
-    </tr>`;
+    </tr>${branchRows}`;
   }).join('');
 }
 
@@ -1465,6 +1560,7 @@ window.__investmentLib = {
   buildHoldingsHeaderMap, validateHoldingsImport, parseHolding,
   replaceHoldings, getTrackedTickers,
   computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
+  aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary,
   formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
   fmtCurrency, fmtPercent, fmtShares,
 };

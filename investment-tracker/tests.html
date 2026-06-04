@@ -82,6 +82,7 @@ function runTests() {
     buildHoldingsHeaderMap, validateHoldingsImport, parseHolding,
     replaceHoldings, getTrackedTickers,
     computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
+    aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary,
     formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
     fmtCurrency, fmtPercent, fmtShares,
     parseCSV,
@@ -413,6 +414,115 @@ function runTests() {
     });
     test('returns em dash for null', () => {
       assertEqual(fmtPercent(null), '—');
+    });
+  });
+
+  // ══ §aggregateHoldingsByTicker ══════════════════════════════════════════
+  suite('aggregateHoldingsByTicker', () => {
+    test('same ticker + same account: merges into one row with summed shares', () => {
+      const holdings = [
+        { id: '1', accountKey: 'A *1234', ticker: 'VTI', securityName: 'Vanguard', shares: 50, costBasis: 10000 },
+        { id: '2', accountKey: 'A *1234', ticker: 'VTI', securityName: 'Vanguard', shares: 75, costBasis: 18750 },
+      ];
+      const result = aggregateHoldingsByTicker(holdings);
+      assertEqual(result.length, 1);
+      assertEqual(result[0].shares, 125);
+    });
+
+    test('same ticker + same account: costBasis is summed', () => {
+      const holdings = [
+        { id: '1', accountKey: 'A *1234', ticker: 'VTI', securityName: '', shares: 50, costBasis: 10000 },
+        { id: '2', accountKey: 'A *1234', ticker: 'VTI', securityName: '', shares: 75, costBasis: 18750 },
+      ];
+      const result = aggregateHoldingsByTicker(holdings);
+      assertEqual(result[0].costBasis, 28750);
+    });
+
+    test('same ticker + different accounts: stays as two separate rows', () => {
+      const holdings = [
+        { id: '1', accountKey: 'A *1234', ticker: 'VTI', securityName: '', shares: 50, costBasis: 10000 },
+        { id: '2', accountKey: 'B *5678', ticker: 'VTI', securityName: '', shares: 75, costBasis: 18750 },
+      ];
+      const result = aggregateHoldingsByTicker(holdings);
+      assertEqual(result.length, 2);
+    });
+
+    test('different tickers + same account: stays as two separate rows', () => {
+      const holdings = [
+        { id: '1', accountKey: 'A *1234', ticker: 'VTI', securityName: '', shares: 50, costBasis: 10000 },
+        { id: '2', accountKey: 'A *1234', ticker: 'BND', securityName: '', shares: 30, costBasis: 2200 },
+      ];
+      const result = aggregateHoldingsByTicker(holdings);
+      assertEqual(result.length, 2);
+    });
+
+    test('securityName taken from first occurrence', () => {
+      const holdings = [
+        { id: '1', accountKey: 'A *1234', ticker: 'VTI', securityName: 'First Name', shares: 50, costBasis: 10000 },
+        { id: '2', accountKey: 'A *1234', ticker: 'VTI', securityName: 'Second Name', shares: 75, costBasis: 18750 },
+      ];
+      const result = aggregateHoldingsByTicker(holdings);
+      assertEqual(result[0].securityName, 'First Name');
+    });
+
+    test('empty input returns empty array', () => {
+      assertEqual(aggregateHoldingsByTicker([]), []);
+    });
+  });
+
+  // ══ §getBranchFromAccountKey ═════════════════════════════════════════════
+  suite('getBranchFromAccountKey', () => {
+    const accounts = [
+      { id: '1', name: 'Vanguard', last4: '1234', inputCsvFormat: ['ticker', 'shares'] },
+      { id: '2', name: 'Robinhood', last4: '5678', inputCsvFormat: ['ticker', 'shares'] },
+    ];
+
+    test('returns account name when profile matches', () => {
+      assertEqual(getBranchFromAccountKey('Vanguard *1234', accounts), 'Vanguard');
+    });
+
+    test('returns correct branch for second account', () => {
+      assertEqual(getBranchFromAccountKey('Robinhood *5678', accounts), 'Robinhood');
+    });
+
+    test('falls back to text before " *" when no profile matches', () => {
+      assertEqual(getBranchFromAccountKey('Fidelity *9999', accounts), 'Fidelity');
+    });
+
+    test('falls back to full key when no " *" present', () => {
+      assertEqual(getBranchFromAccountKey('NoStarKey', accounts), 'NoStarKey');
+    });
+  });
+
+  // ══ §computeBranchSummary ════════════════════════════════════════════════
+  suite('computeBranchSummary', () => {
+    const accounts = [
+      { id: '1', name: 'Vanguard', last4: '1234', inputCsvFormat: ['ticker', 'shares'] },
+      { id: '2', name: 'Robinhood', last4: '5678', inputCsvFormat: ['ticker', 'shares'] },
+    ];
+
+    test('groups account totals by branch and sums values', () => {
+      const accountTotals = {
+        'Vanguard *1234': { value: 28500, costBasis: 22000 },
+        'Robinhood *5678': { value: 5200, costBasis: 4100 },
+      };
+      const result = computeBranchSummary(accountTotals, accounts);
+      assertEqual(result['Vanguard'].value, 28500);
+      assertEqual(result['Robinhood'].value, 5200);
+    });
+
+    test('two accounts in same branch are summed together', () => {
+      const accts = [
+        { id: '1', name: 'Robinhood', last4: '1234', inputCsvFormat: ['ticker', 'shares'] },
+        { id: '2', name: 'Robinhood', last4: '5678', inputCsvFormat: ['ticker', 'shares'] },
+      ];
+      const accountTotals = {
+        'Robinhood *1234': { value: 10000, costBasis: 8000 },
+        'Robinhood *5678': { value: 5000, costBasis: 4000 },
+      };
+      const result = computeBranchSummary(accountTotals, accts);
+      assertEqual(result['Robinhood'].value, 15000);
+      assertEqual(result['Robinhood'].costBasis, 12000);
     });
   });
 
