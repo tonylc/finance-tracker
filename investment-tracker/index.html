@@ -984,18 +984,21 @@ function renderHoldingsTable() {
   emptyEl.style.display = 'none';
   tableWrap.style.display = '';
   chipsEl.style.display = '';
-  countEl.textContent = `${holdings.length} position${holdings.length !== 1 ? 's' : ''}`;
 
-  // Account chips with per-account clear button
+  // Aggregate tax lots before display (same logic as Portfolio view)
+  const aggregated = aggregateHoldingsByTicker(holdings);
+  countEl.textContent = `${aggregated.length} position${aggregated.length !== 1 ? 's' : ''}`;
+
+  // Account chips with per-account clear button (raw count for context)
   const byAccount = {};
   holdings.forEach(h => { byAccount[h.accountKey] = (byAccount[h.accountKey] || 0) + 1; });
   chipsEl.innerHTML = Object.entries(byAccount).map(([key, n]) =>
     `<div class="account-chip">${key}<span>${n}</span><button onclick="clearAccountHoldings('${key.replace(/'/g, "\\'")}')" title="Clear ${key}" style="background:none;border:none;color:#3949ab;cursor:pointer;font-size:13px;line-height:1;padding:0 0 0 4px;">×</button></div>`
   ).join('');
 
-  // Table rows
+  // Table rows (aggregated)
   const tbody = document.getElementById('upload-holdings-tbody');
-  tbody.innerHTML = holdings.map(h => {
+  tbody.innerHTML = aggregated.map(h => {
     const cps = h.shares > 0 && h.costBasis > 0 ? fmtCurrency(h.costBasis / h.shares) : '—';
     return `<tr>
       <td>${h.accountKey}</td>
