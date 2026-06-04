@@ -49,13 +49,13 @@ async function seedAccounts(page, accounts = [VANGUARD_ACCOUNT]) {
 
 // Pre-seed holdings + prices into localStorage
 async function seedHoldings(page, holdings = [], currentPrices = null, networthSnapshots = []) {
-  await page.addInitScript((h, cp, ns) => {
+  await page.addInitScript(({ h, cp, ns }) => {
     localStorage.setItem('investmentTrackerData', JSON.stringify({
       holdings: h,
       currentPrices: cp,
       networthSnapshots: ns,
     }));
-  }, holdings, currentPrices, networthSnapshots);
+  }, { h: holdings, cp: currentPrices, ns: networthSnapshots });
 }
 
 // Full seeded state: Vanguard account + holdings + prices

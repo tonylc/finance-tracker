@@ -41,4 +41,54 @@ test.describe('Prices', () => {
     await expect(page.locator('#prices-success')).toContainText('Saved 1');
     await expect(page.locator('#prices-last-fetched')).toContainText('Last saved:');
   });
+
+  test('Export Tickers downloads a CSV containing all tracked tickers', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+      { id: 'h2', accountKey: 'Vanguard *1234', ticker: 'BND', securityName: '', shares: 50, costBasis: 3650 },
+    ]);
+    await page.goto('index.html');
+    await goToView(page, 'prices');
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('#prices-export-btn'),
+    ]);
+
+    const content = await download.createReadStream().then(stream => new Promise((res, rej) => {
+      let data = '';
+      stream.on('data', c => { data += c; });
+      stream.on('end', () => res(data));
+      stream.on('error', rej);
+    }));
+
+    expect(content).toContain('Ticker,Price');
+    expect(content).toContain('VTI');
+    expect(content).toContain('BND');
+    expect(download.suggestedFilename()).toBe('tickers.csv');
+  });
+
+  test('Export Tickers pre-fills saved prices in the CSV', async ({ page }) => {
+    await seedAccounts(page, [VANGUARD_ACCOUNT]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+    ], { fetchedAt: '2026-05-21', prices: { VTI: 285.50 } });
+    await page.goto('index.html');
+    await goToView(page, 'prices');
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('#prices-export-btn'),
+    ]);
+
+    const content = await download.createReadStream().then(stream => new Promise((res, rej) => {
+      let data = '';
+      stream.on('data', c => { data += c; });
+      stream.on('end', () => res(data));
+      stream.on('error', rej);
+    }));
+
+    expect(content).toContain('VTI,285.5');
+  });
 });
