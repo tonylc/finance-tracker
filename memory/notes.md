@@ -30,6 +30,22 @@ responsibilities or a missing single-source-of-truth is the cause, do the refact
 Concrete trigger: if you find yourself writing a second commit to fix the same broken
 behavior, treat that as a signal to reconsider the design before writing more patches.
 
+## Test Every Pipeline Stage a Field Touches
+
+When a feature adds a field or behavior that more than one stage of a pipeline reads,
+unit-test EVERY stage that touches it — or add one integration/E2E test that crosses the
+seam. Testing only the stage with the "interesting" logic leaves the seam untested.
+
+Concrete miss: `description_fallback` was unit-tested in `parseTransaction` (where the
+fallback logic lives) but not in `validateImport` (which also reads the description and
+runs FIRST). Validation rejected blank-primary rows before the fallback could apply, so
+the feature was broken for exactly its intended case. The import path is
+`validateImport → parseTransaction`; both read `description`, so both needed coverage.
+
+Do NOT justify skipping an E2E with "behavior is reachable through pure functions" unless
+you have actually tested every pure function on the path. "Existing tests already thread
+this through" is only true if an existing test exercises THIS specific input case.
+
 ---
 ## 2026-04-04 13:42
 
