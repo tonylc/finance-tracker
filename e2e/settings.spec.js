@@ -180,9 +180,8 @@ test.describe('Import Settings', () => {
 });
 
 test.describe('Amount Sign Inversion', () => {
-  test('account with -amount format: positive CSV amounts are stored as negative and budget totals correctly', async ({ page }) => {
+  async function addInvertAccount(page) {
     await page.goto('index.html');
-    // Create an account with -amount format
     await page.click('[data-view="settings"]');
     await page.click('#settings-add-btn');
     await page.fill('#sf-name', 'My Bank');
@@ -190,15 +189,38 @@ test.describe('Amount Sign Inversion', () => {
     await page.fill('#sf-format-input', '["date","description","-amount","category","fix"]');
     await page.click('#sf-save-btn');
     await expect(page.locator('#settings-form-card')).toBeHidden();
+  }
 
-    // Import CSV with positive amounts via Load view
+  // Correct single-inversion: -amount normalizes at raw ingestion (Categorize view)
+  test('account with -amount format: positive raw amounts are normalized to negative on Categorize import', async ({ page }) => {
+    await addInvertAccount(page);
+    await page.click('[data-view="categorize"]');
+    await page.selectOption('#cat-acct-profile', { label: 'My Bank *7777' });
+    await page.fill('#cat-csv', '2024-03-01,Coffee,5.00,Coffee / Bakery,false');
+    await page.click('#cat-import-btn');
+    expect(await page.evaluate(() => state.catSession[0].amount)).toBe(-5);
+  });
+
+  // Regression guard: crossing the Categorize-export → Load-import seam must not double-flip
+  test('normalized amounts survive a Categorize-export → Load-import round-trip without double-inversion', async ({ page }) => {
+    await addInvertAccount(page);
+
+    // Categorize import of raw positive amounts → normalized to negative
+    await page.click('[data-view="categorize"]');
+    await page.selectOption('#cat-acct-profile', { label: 'My Bank *7777' });
+    await page.fill('#cat-csv', '2024-03-01,Coffee,5.00,Coffee / Bakery,false\n2024-03-15,Groceries,20.00,Groceries,false');
+    await page.click('#cat-import-btn');
+    await page.click('#cat-export-btn');
+    const canonical = await page.locator('#export-output').inputValue();
+    const dataRows = canonical.trim().split('\n').slice(1).join('\n'); // drop header row
+
+    // Load-import the canonical export for the same (-amount) account
     await page.click('[data-view="load"]');
     await page.selectOption('#load-acct-profile', { label: 'My Bank *7777' });
-    const csv = '2024-03-01,Coffee,5.00,Coffee / Bakery,false\n2024-03-15,Groceries,20.00,Groceries,false';
-    await page.fill('#load-csv', csv);
+    await page.fill('#load-csv', dataRows);
     await page.click('#load-import-btn');
 
-    // Budget totals should be negative (amounts were inverted)
+    // Budget total stays normalized (-$25.00), NOT double-flipped to +$25.00
     await page.click('[data-view="budget"]');
     await expect(page.locator('#budget-month-total-banner')).toHaveText('-$25.00');
   });

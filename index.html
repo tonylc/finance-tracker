@@ -1142,10 +1142,10 @@ function handleLoadImport() {
   const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
   if (dataRows.length < 1) return showLoadError('CSV must have at least one data row.');
 
-  const invertAmount = Array.isArray(account.inputCsvFormat) && account.inputCsvFormat.includes('-amount');
-  const loadHeaderMap = invertAmount ? { ...LOAD_HEADER_MAP, invertAmount: true } : LOAD_HEADER_MAP;
-
-  const validation = validateImport(dataRows, loadHeaderMap, true);
+  // The Load view consumes the app's canonical, already-normalized format.
+  // `-amount` is applied once at raw ingestion (Categorize view) and must NOT
+  // be re-applied here, or normalized data double-flips on re-import.
+  const validation = validateImport(dataRows, LOAD_HEADER_MAP, true);
   if (!validation.valid) {
     showLoadError(`Import rejected — fix the following errors before loading:<ul style="margin-top:6px;padding-left:18px;">${
       validation.errors.map(e => `<li>${e}</li>`).join('')
@@ -1154,7 +1154,7 @@ function handleLoadImport() {
   }
 
   const accountKey = formatAccountKey(account.name, account.last4);
-  const incoming = dataRows.map(fields => parseTransaction(fields, loadHeaderMap, accountKey));
+  const incoming = dataRows.map(fields => parseTransaction(fields, LOAD_HEADER_MAP, accountKey));
   state.transactions = [...state.transactions, ...incoming];
 
   if (!state.accounts.find(a => a.key === accountKey)) {

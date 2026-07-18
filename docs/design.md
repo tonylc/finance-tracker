@@ -43,8 +43,8 @@ The app is a single HTML page (`index.html`) with four views toggled by a top na
 
 #### CSV Import
 
-- The selected account profile provides `inputCsvFormat` — a positional array mapping column index → field name. `buildHeaderMap()` uses this to locate date, description, amount, category, and fix columns by position rather than header name.
-- If the first row of the pasted CSV looks like a header (non-numeric date field), it is skipped automatically.
+- The Load view consumes the app's **canonical** CSV format — fixed column order `Date,Description,Amount,Category,Fix` (`LOAD_HEADER_MAP`), which is exactly what the Categorize view exports. It does not use the account's positional `inputCsvFormat`; raw bank CSVs with arbitrary column layouts are ingested through the Categorize view instead. Amounts are treated as already-normalized (negative = spend); `-amount` is not applied here (see §2.5 Amount Sign Inversion).
+- If the first row of the pasted CSV looks like a header (matches the expected field names), it is skipped automatically.
 - Each imported row is validated by `validateImport()` before being processed. Rows with unparseable dates, blank descriptions, or non-finite amounts are rejected with a row-level error message. For split debit/credit layouts (two columns mapped to `amount`), exactly one column must be non-blank per row; both-blank and both-filled are also validation errors.
 - No deduplication is applied on import. Every row in a valid CSV is appended to `state.transactions`, including rows that are identical to existing transactions. This preserves legitimate same-day, same-amount transactions (e.g. two identical coffee purchases).
 - `state.transactions` is the single source of truth. It grows monotonically during a session and is persisted to `localStorage` key `'financeTrackerTx'` after every import.
@@ -279,11 +279,11 @@ Each account profile has a `type` field: `"credit"` (default) or `"bank"`. The v
 
 #### Amount Sign Inversion
 
-When an account's `inputCsvFormat` contains `"-amount"`, every imported amount is negated: a CSV value of `50.00` is stored as `−50`, and `−30.00` is stored as `30`. This corrects for bank accounts that export spending as positive numbers (the inverse of the app's convention where negative = spend).
+When an account's `inputCsvFormat` contains `"-amount"`, every amount is negated at **raw import time**: a CSV value of `50.00` is stored as `−50`, and `−30.00` is stored as `30`. This corrects for bank accounts that export spending as positive numbers (the inverse of the app's convention where negative = spend).
 
-In the **Categorize view**, `buildHeaderMap(rows[0], account.inputCsvFormat)` picks up `"-amount"` and sets `map.invertAmount = true`; `parseTransaction()` then negates the value automatically.
+`-amount` is applied **exactly once**, in the **Categorize view**, where raw bank CSVs are ingested: `buildHeaderMap(rows[0], account.inputCsvFormat)` picks up `"-amount"` and sets `map.invertAmount = true`, and `parseTransaction()` negates the value. After normalization the transaction is stored in the app's canonical convention (negative = spend).
 
-In the **Load view**, `handleLoadImport()` checks `account.inputCsvFormat.includes('-amount')` and, if true, builds `{ ...LOAD_HEADER_MAP, invertAmount: true }` before calling `parseTransaction()`.
+The **Load view** consumes the app's canonical, already-normalized format — the Categorize export, in fixed `Date,Description,Amount,Category,Fix` order — and does **not** re-apply `-amount`. Re-inverting there would double-flip the sign of data that has already been normalized (e.g. a Categorize-normalized `−50` would wrongly become `+50` on re-import).
 
 ---
 
