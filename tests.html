@@ -677,6 +677,26 @@ function runTests() {
       assert(!r.valid);
       assert(r.errors[0].includes('Row 2'));
     });
+
+    test('given blank primary description but a fallback column with a value, passes', () => {
+      const hdrFb = buildHeaderMap(null, ['date', 'description_fallback', 'description', 'amount']);
+      const r = validateImport([['2025-01-01', 'ACME MERCHANT', '', '-4.50']], hdrFb);
+      assert(r.valid);
+    });
+
+    test('given both primary description and fallback blank, fails', () => {
+      const hdrFb = buildHeaderMap(null, ['date', 'description_fallback', 'description', 'amount']);
+      const r = validateImport([['2025-01-01', '', '', '-4.50']], hdrFb);
+      assert(!r.valid);
+      assert(r.errors[0].includes('description is blank'));
+    });
+
+    test('given a short row missing the primary description, fallback value keeps it valid', () => {
+      // description mapped to index 3, absent from a 3-field row; fallback at index 1
+      const hdrFb = buildHeaderMap(null, ['date', 'description_fallback', 'amount', 'description']);
+      const r = validateImport([['2025-01-01', 'ACME MERCHANT', '-4.50']], hdrFb);
+      assert(r.valid);
+    });
   });
 
   // ── parseTransaction ──────────────────────────────────────────────────────

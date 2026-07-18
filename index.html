@@ -820,6 +820,18 @@ function parseCSVLine(line) {
   return fields;
 }
 
+// Resolve a row's effective description: the primary column, or the
+// description_fallback column when the primary is blank (empty, whitespace,
+// or a missing column). Single source of truth shared by validateImport and
+// parseTransaction.
+function resolveDescription(fields, headerMap) {
+  const primary = (fields[headerMap.description] || '').trim();
+  if (primary) return primary;
+  if (headerMap.descriptionFallback !== undefined)
+    return (fields[headerMap.descriptionFallback] || '').trim();
+  return primary;
+}
+
 function validateImport(rows, headerMap, requireCategory) {
   // rows: array of field arrays (excluding header row)
   // headerMap: { date, description, amount, category, fix } → column indices
@@ -834,8 +846,8 @@ function validateImport(rows, headerMap, requireCategory) {
     else if (isNaN(new Date(dateVal).getTime()))
       errors.push(`Row ${rowNum}: date "${dateVal}" is not a valid date`);
 
-    // description — must be a non-blank string
-    if (!(fields[headerMap.description] || '').trim())
+    // description — must resolve to a non-blank string (honours fallback)
+    if (!resolveDescription(fields, headerMap))
       errors.push(`Row ${rowNum}: description is blank`);
 
     // amount — must be non-blank and parse as a finite number
@@ -936,13 +948,7 @@ function parseTransaction(fields, headerMap, accountKey) {
       if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
       return raw;
     })(),
-    description: (() => {
-      const primary = (fields[headerMap.description] || '').trim();
-      if (primary) return primary;
-      if (headerMap.descriptionFallback !== undefined)
-        return (fields[headerMap.descriptionFallback] || '').trim();
-      return primary;
-    })(),
+    description: resolveDescription(fields, headerMap),
     amount: (() => {
       if (headerMap.debitAmount !== undefined) {
         const debit = (fields[headerMap.debitAmount] || '').trim();
