@@ -878,14 +878,18 @@ function buildHeaderMap(headerRow, inputCsvFormat) {
       if (field === 'debit_amount') map.debitAmount = i;
       else if (field === 'credit_amount') map.creditAmount = i;
       else if (field === '-amount') { map.amount = i; map.invertAmount = true; }
+      else if (field === 'description_fallback') map.descriptionFallback = i;
       else if (field) map[field] = i;
     });
     const dateCt   = inputCsvFormat.filter(f => f === 'date').length;
     const descCt   = inputCsvFormat.filter(f => f === 'description').length;
+    const descFbCt = inputCsvFormat.filter(f => f === 'description_fallback').length;
     const amtCt    = inputCsvFormat.filter(f => f === 'amount').length;
     const negAmtCt = inputCsvFormat.filter(f => f === '-amount').length;
     if (dateCt > 1)   return { error: 'date may only appear once' };
     if (descCt > 1)   return { error: 'description may only appear once' };
+    if (descFbCt > 1) return { error: 'description_fallback may only appear once' };
+    if (descFbCt > 0 && descCt === 0) return { error: 'description_fallback requires a description column' };
     if (amtCt  > 1)   return { error: 'amount may only appear once' };
     if (negAmtCt > 1) return { error: 'amount may only appear once' };
     if (amtCt > 0 && negAmtCt > 0) return { error: 'amount and -amount cannot both be specified' };
@@ -932,7 +936,13 @@ function parseTransaction(fields, headerMap, accountKey) {
       if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
       return raw;
     })(),
-    description: (fields[headerMap.description] || '').trim(),
+    description: (() => {
+      const primary = (fields[headerMap.description] || '').trim();
+      if (primary) return primary;
+      if (headerMap.descriptionFallback !== undefined)
+        return (fields[headerMap.descriptionFallback] || '').trim();
+      return primary;
+    })(),
     amount: (() => {
       if (headerMap.debitAmount !== undefined) {
         const debit = (fields[headerMap.debitAmount] || '').trim();

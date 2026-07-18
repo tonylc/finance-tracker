@@ -598,6 +598,22 @@ function runTests() {
       const m = buildHeaderMap(null, ['date', 'description', '-amount', 'debit_amount', 'credit_amount']);
       assert(typeof m.error === 'string');
     });
+
+    test('given description_fallback, sets descriptionFallback index', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'description_fallback', 'amount']);
+      assertEqual(m.description, 1);
+      assertEqual(m.descriptionFallback, 2);
+    });
+
+    test('given description_fallback without description, returns error', () => {
+      const m = buildHeaderMap(null, ['date', 'description_fallback', 'amount']);
+      assert(typeof m.error === 'string');
+    });
+
+    test('given description_fallback more than once, returns error', () => {
+      const m = buildHeaderMap(null, ['date', 'description', 'description_fallback', 'description_fallback', 'amount']);
+      assert(typeof m.error === 'string');
+    });
   });
 
   // ── validateImport ────────────────────────────────────────────────────────
@@ -775,6 +791,36 @@ function runTests() {
       const neg = parseTransaction(['2024-01-01', 'Spend', '-45.00', '', ''], hm, 'Chase *1234');
       assertEqual(pos.amount, 100);
       assertEqual(neg.amount, -45);
+    });
+
+    test('given blank primary description and a fallback column, uses the fallback value', () => {
+      const hm = { date: 0, description: 1, descriptionFallback: 2, amount: 3, category: -1, fix: -1 };
+      const t = parseTransaction(['2024-01-01', '', 'ACME MERCHANT', '-9.99'], hm, 'Chase *1234');
+      assertEqual(t.description, 'ACME MERCHANT');
+    });
+
+    test('given a present primary description, ignores the fallback column', () => {
+      const hm = { date: 0, description: 1, descriptionFallback: 2, amount: 3, category: -1, fix: -1 };
+      const t = parseTransaction(['2024-01-01', 'Real Description', 'ACME MERCHANT', '-9.99'], hm, 'Chase *1234');
+      assertEqual(t.description, 'Real Description');
+    });
+
+    test('given blank primary and no fallback column, description stays empty', () => {
+      const hm = { date: 0, description: 1, amount: 2, category: -1, fix: -1 };
+      const t = parseTransaction(['2024-01-01', '', '-9.99', ''], hm, 'Chase *1234');
+      assertEqual(t.description, '');
+    });
+
+    test('given a short row missing the primary description field, uses the fallback', () => {
+      const hm = { date: 0, description: 3, descriptionFallback: 1, amount: 2, category: -1, fix: -1 };
+      const t = parseTransaction(['2024-01-01', 'ACME MERCHANT', '-9.99'], hm, 'Chase *1234'); // index 3 absent
+      assertEqual(t.description, 'ACME MERCHANT');
+    });
+
+    test('given the literal string "null" as primary description, keeps it (not treated as blank)', () => {
+      const hm = { date: 0, description: 1, descriptionFallback: 2, amount: 3, category: -1, fix: -1 };
+      const t = parseTransaction(['2024-01-01', 'null', 'ACME MERCHANT', '-9.99'], hm, 'Chase *1234');
+      assertEqual(t.description, 'null');
     });
   });
 
