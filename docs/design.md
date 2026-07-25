@@ -217,6 +217,16 @@ When ≥1 row is checked, the `#cat-bulk-bar` panel appears with a count, catego
 
 When all rows have a category, clicking **Export CSV** calls `toCSV(sortByDateAsc(state.catSession))`. The resulting CSV uses the `Date,Description,Amount,Category,Fix` format. `toCSV()` handles quoting of fields containing commas, quotes, or newlines. The output is displayed in `#cat-export-card`.
 
+#### Merge to Account
+
+The Review header has a **Merge to Account** button (`#cat-merge-btn`) that appends the categorized session directly into the transaction store, replacing the manual export → concatenate → clear → re-import workflow. Merging sequential categorized batches is assumed safe (non-overlapping), so no deduplication is applied.
+
+The merge is an explicit action, never automatic, and is only offered once the session is fully categorized:
+- **Visibility gate (UI):** the button is hidden by default and shown by `updateCatProgress()` only when `done === total` (every row categorized). It hides again if a row is later cleared. Because `updateCatProgress()` runs on every category change, bulk-apply, and initial render, the button tracks the session state continuously.
+- **Business-logic guard:** the merge rule itself lives in the pure `mergeCategorizedSession(existing, catSession)` function (see §4), not the UI. It returns `{ ok: false }` for an empty or not-fully-categorized session, so a merge cannot happen even if `handleCatMerge()` is invoked directly (bypassing the hidden button).
+
+On success, `handleCatMerge()` assigns `result.transactions` to `state.transactions`, registers `result.accountKey` in `state.accounts` if absent, calls `saveTransactions()` to persist, then resets the session (`state.catSession = []`, hides `#cat-review`, clears `#cat-csv`) to prevent a double-merge and shows a success message in `#cat-import-errors`. The merged transactions are immediately visible in the Load and Budget views and survive a reload.
+
 ---
 
 ### 2.4 Responsive Design
@@ -377,6 +387,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 |---|---|---|
 | `validateExport` | `(rows) → { valid, invalidRows: number[] }` | Returns valid=false and indices of rows with blank category. |
 | `toCSV` | `(rows) → string` | Serializes rows to CSV string with header `Date,Description,Amount,Category,Fix`. Quotes fields containing commas, quotes, or newlines. |
+| `mergeCategorizedSession` | `(existing: Transaction[], catSession: Transaction[]) → { ok: true, transactions, accountKey } \| { ok: false, reason }` | Enforces the merge rule for appending a categorized session into the store. Returns `{ ok: false, reason: 'empty' }` if `catSession` is not a non-empty array, or `{ ok: false, reason: 'uncategorized', invalidRows }` if any row has a blank category (checked via `validateExport`). On success returns `{ ok: true, transactions: [...existing, ...catSession], accountKey: catSession[0].accountKey }`. Pure — does not mutate `existing`, touch the DOM, or persist. |
 
 ### Settings Import / Export
 

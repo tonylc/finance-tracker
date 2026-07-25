@@ -277,3 +277,47 @@ test.describe('Quoted Field Parsing', () => {
     await expect(row).toContainText('-$120.00');
   });
 });
+
+test.describe('Merge to Account', () => {
+  async function addAccount(page) {
+    await page.goto('index.html');
+    await page.click('[data-view="settings"]');
+    await page.click('#settings-add-btn');
+    await page.fill('#sf-name', 'Chase');
+    await page.fill('#sf-last4', '1234');
+    await page.fill('#sf-format-input', '["date","description","amount","category","fix"]');
+    await page.click('#sf-save-btn');
+  }
+
+  test('given all rows categorized, merge button is visible and merges into the account (persisting)', async ({ page }) => {
+    await addAccount(page);
+    await page.click('[data-view="categorize"]');
+    await page.selectOption('#cat-acct-profile', { label: 'Chase *1234' });
+    await page.fill('#cat-csv', '2024-03-15,Coffee,-4.50,Coffee / Bakery,false\n2024-03-20,Groceries,-30.00,Groceries,false');
+    await page.click('#cat-import-btn');
+
+    await expect(page.locator('#cat-merge-btn')).toBeVisible();
+    await page.click('#cat-merge-btn');
+    await expect(page.locator('#cat-review')).toBeHidden();
+    await expect(page.locator('#cat-import-errors')).toContainText('Merged');
+
+    // Landed in the store and persists across reload
+    await page.reload();
+    await page.click('[data-view="load"]');
+    await expect(page.locator('#total-tx-count')).toHaveText('2');
+    await expect(page.locator('#accounts-list')).toContainText('Chase *1234');
+  });
+
+  test('given an uncategorized row, merge button is hidden until the category is assigned', async ({ page }) => {
+    await addAccount(page);
+    await page.click('[data-view="categorize"]');
+    await page.selectOption('#cat-acct-profile', { label: 'Chase *1234' });
+    // Second row (2024-03-20 Mystery) has a blank category; sorts newest-first to idx 0
+    await page.fill('#cat-csv', '2024-03-15,Coffee,-4.50,Coffee / Bakery,false\n2024-03-20,Mystery,-9.99,,false');
+    await page.click('#cat-import-btn');
+
+    await expect(page.locator('#cat-merge-btn')).toBeHidden();
+    await page.selectOption('#cat-tbody tr[data-idx="0"] select', 'Groceries');
+    await expect(page.locator('#cat-merge-btn')).toBeVisible();
+  });
+});

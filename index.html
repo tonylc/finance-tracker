@@ -567,6 +567,7 @@
           <h3 style="margin:0;">Review &amp; Categorize</h3>
           <div style="display:flex;gap:8px;align-items:center;">
             <span id="cat-progress" style="font-size:12px;color:#555;"></span>
+            <button class="btn btn-primary" id="cat-merge-btn" style="display:none;">Merge to Account</button>
             <button class="btn btn-success" id="cat-export-btn">Export CSV</button>
           </div>
         </div>
@@ -1043,6 +1044,19 @@ function validateExport(rows) {
     if (!r.category || !r.category.trim()) invalidRows.push(i);
   });
   return { valid: invalidRows.length === 0, invalidRows };
+}
+
+// Merge rule for appending a categorized session into the transaction store.
+// Pure: does not mutate `existing`, touch the DOM, or persist. The guard lives
+// here (not the UI), so a merge cannot happen for an empty or not-fully-
+// categorized session even if invoked directly.
+function mergeCategorizedSession(existing, catSession) {
+  if (!Array.isArray(catSession) || catSession.length === 0)
+    return { ok: false, reason: 'empty' };
+  const check = validateExport(catSession);
+  if (!check.valid)
+    return { ok: false, reason: 'uncategorized', invalidRows: check.invalidRows };
+  return { ok: true, transactions: [...existing, ...catSession], accountKey: catSession[0].accountKey };
 }
 
 function toCSV(rows) {
@@ -1578,6 +1592,7 @@ function renderActiveBudgetPanel() {
 // ══════════════════════════════════════════════════
 document.getElementById('cat-import-btn').addEventListener('click', handleCatImport);
 document.getElementById('cat-export-btn').addEventListener('click', handleCatExport);
+document.getElementById('cat-merge-btn').addEventListener('click', handleCatMerge);
 document.getElementById('cat-copy-btn').addEventListener('click', () => {
   const ta = document.getElementById('export-output');
   ta.select();
@@ -1775,6 +1790,8 @@ function updateCatProgress() {
   document.getElementById('cat-progress').textContent = `${done} / ${total} categorized`;
   document.getElementById('cat-export-btn').disabled = false;
   document.getElementById('cat-export-error').style.display = 'none';
+  // Merge to Account is offered only when every row is categorized
+  document.getElementById('cat-merge-btn').style.display = (total > 0 && done === total) ? '' : 'none';
 }
 
 function updateBulkBar() {
@@ -1955,6 +1972,30 @@ function handleCatExport() {
   document.getElementById('export-output').value = csv;
   document.getElementById('cat-export-card').style.display = 'block';
   document.getElementById('cat-export-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function handleCatMerge() {
+  const result = mergeCategorizedSession(state.transactions, state.catSession);
+  if (!result.ok) return; // guard lives in mergeCategorizedSession; session kept for review
+
+  const count = state.catSession.length;
+  state.transactions = result.transactions;
+  if (!state.accounts.find(a => a.key === result.accountKey)) {
+    state.accounts.push({ key: result.accountKey });
+  }
+  saveTransactions();
+
+  // Reset the session so it cannot be merged twice
+  state.catSession = [];
+  selectedIdxs.clear();
+  document.getElementById('cat-review').style.display = 'none';
+  document.getElementById('cat-export-card').style.display = 'none';
+  document.getElementById('cat-csv').value = '';
+
+  const msg = document.getElementById('cat-import-errors');
+  msg.className = 'alert alert-success';
+  msg.innerHTML = `Merged <strong>${count}</strong> transaction(s) into <strong>${result.accountKey}</strong>. View them in Load or Budget.`;
+  msg.style.display = 'block';
 }
 
 // ══════════════════════════════════════════════════
@@ -2201,7 +2242,7 @@ function importAccountsJSON(jsonString) {
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, filterBySearch, aggregateByCategory,
-  totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, getMonthList,
+  totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, mergeCategorizedSession, getMonthList,
   exportAccountsJSON, importAccountsJSON, isValidLast4,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };

@@ -85,7 +85,7 @@ function runTests() {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
     parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange,
     aggregateByCategory, totalSpend, cycleCategoryByKey,
-    validateExport, toCSV, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
+    validateExport, toCSV, mergeCategorizedSession, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
     exportAccountsJSON, importAccountsJSON, isValidLast4, ALL_SUBS, VALID_CATS,
   } = lib;
 
@@ -1018,6 +1018,55 @@ function runTests() {
       assert(lines[1].includes('Starbucks'));
       assert(lines[1].includes('-4.75'));
       assert(lines[1].includes('Coffee / Bakery'));
+    });
+  });
+
+  // ── mergeCategorizedSession ───────────────────────────────────────────────
+  suite('mergeCategorizedSession', () => {
+    const existing = [
+      { id: 'e1', accountKey: 'Chase *1234', date: '2025-01-01', description: 'Old', amount: -10, category: 'Groceries', fix: false },
+    ];
+    const categorized = [
+      { id: 's1', accountKey: 'Chase *1234', date: '2025-02-01', description: 'Coffee', amount: -4.5, category: 'Coffee / Bakery', fix: false },
+      { id: 's2', accountKey: 'Chase *1234', date: '2025-02-02', description: 'Food',   amount: -30,  category: 'Groceries',       fix: false },
+    ];
+
+    test('given a fully categorized session, appends it to existing transactions and returns ok', () => {
+      const r = mergeCategorizedSession(existing, categorized);
+      assert(r.ok);
+      assertEqual(r.transactions.length, 3);
+      // existing first, then session (append order)
+      assertEqual(r.transactions[0].id, 'e1');
+      assertEqual(r.transactions[1].id, 's1');
+      assertEqual(r.transactions[2].id, 's2');
+    });
+
+    test('given a session with a blank-category row, returns ok:false and merges nothing', () => {
+      const withBlank = [
+        { id: 's1', accountKey: 'Chase *1234', date: '2025-02-01', description: 'Coffee', amount: -4.5, category: 'Coffee / Bakery', fix: false },
+        { id: 's2', accountKey: 'Chase *1234', date: '2025-02-02', description: 'Mystery', amount: -9.99, category: '', fix: false },
+      ];
+      const r = mergeCategorizedSession(existing, withBlank);
+      assert(!r.ok);
+      assertEqual(r.reason, 'uncategorized');
+      assert(r.transactions === undefined, 'no transactions returned');
+    });
+
+    test('given an empty session, returns ok:false', () => {
+      const r = mergeCategorizedSession(existing, []);
+      assert(!r.ok);
+      assertEqual(r.reason, 'empty');
+    });
+
+    test('does not mutate the existing transactions array', () => {
+      const src = [{ id: 'e1', accountKey: 'Chase *1234', date: '2025-01-01', description: 'Old', amount: -10, category: 'Groceries', fix: false }];
+      mergeCategorizedSession(src, categorized);
+      assertEqual(src.length, 1);
+    });
+
+    test('returns the session accountKey on success', () => {
+      const r = mergeCategorizedSession(existing, categorized);
+      assertEqual(r.accountKey, 'Chase *1234');
     });
   });
 
