@@ -227,6 +227,8 @@ The merge is an explicit action, never automatic, and is only offered once the s
 
 On success, `handleCatMerge()` assigns `result.transactions` to `state.transactions`, registers `result.accountKey` in `state.accounts` if absent, calls `saveTransactions()` to persist, then resets the session (`state.catSession = []`, hides `#cat-review`, clears `#cat-csv`) to prevent a double-merge and shows a success message in `#cat-import-errors`. The merged transactions are immediately visible in the Load and Budget views and survive a reload.
 
+Merging also surfaces the exportable CSV of the merged rows: `handleCatMerge()` writes `toCSV(sortByDateAsc(state.catSession))` into `#export-output` and shows `#cat-export-card` before clearing the session, so the CSV (and its **Copy** button) remains available after the merge. `#cat-export-card` is a sibling of `#cat-review` (not a child), so it stays visible once the review panel is hidden; a subsequent import hides it again via `handleCatImport()`.
+
 ---
 
 ### 2.4 Responsive Design

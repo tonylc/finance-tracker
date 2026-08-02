@@ -320,4 +320,20 @@ test.describe('Merge to Account', () => {
     await page.selectOption('#cat-tbody tr[data-idx="0"] select', 'Groceries');
     await expect(page.locator('#cat-merge-btn')).toBeVisible();
   });
+
+  test('after merging, the exported CSV of the merged transactions remains available', async ({ page }) => {
+    await addAccount(page);
+    await page.click('[data-view="categorize"]');
+    await page.selectOption('#cat-acct-profile', { label: 'Chase *1234' });
+    await page.fill('#cat-csv', '2024-03-15,Coffee,-4.50,Coffee / Bakery,false\n2024-03-20,Groceries,-30.00,Groceries,false');
+    await page.click('#cat-import-btn');
+    await page.click('#cat-merge-btn');
+
+    await expect(page.locator('#cat-review')).toBeHidden();
+    await expect(page.locator('#cat-export-card')).toBeVisible();
+    const csv = await page.locator('#export-output').inputValue();
+    expect(csv.split('\n')[0]).toBe('Date,Description,Amount,Category,Fix');
+    expect(csv).toContain('Coffee');
+    expect(csv).toContain('Groceries');
+  });
 });
