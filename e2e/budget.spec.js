@@ -312,4 +312,27 @@ test.describe('Account Filter', () => {
     await page.locator('#budget-account-filter [data-account-key="Bank of America *5678"]').click();
     await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
   });
+
+  test('double-clicking a chip isolates the view to only that account', async ({ page }) => {
+    await seedMultiAccountTransactions(page);
+    await page.goto('index.html');
+    await switchToBudget(page);
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('3');
+    // Isolate to Chase (2 tx)
+    await page.locator('#budget-account-filter [data-account-key="Chase *1234"]').dblclick();
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('2');
+    // Double-clicking a different chip switches isolation (BofA: 1 tx)
+    await page.locator('#budget-account-filter [data-account-key="Bank of America *5678"]').dblclick();
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('1');
+  });
+
+  test('after isolating via double-click, single-clicking another chip adds it back', async ({ page }) => {
+    await seedMultiAccountTransactions(page);
+    await page.goto('index.html');
+    await switchToBudget(page);
+    await page.locator('#budget-account-filter [data-account-key="Chase *1234"]').dblclick();
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('2'); // isolated to Chase
+    await page.locator('#budget-account-filter [data-account-key="Bank of America *5678"]').click();
+    await expect(page.locator('#budget-month-tx-count')).toHaveText('3'); // BofA added back
+  });
 });

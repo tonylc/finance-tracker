@@ -84,7 +84,7 @@ function runTests() {
   const {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
     parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange,
-    aggregateByCategory, totalSpend, cycleCategoryByKey,
+    aggregateByCategory, totalSpend, cycleCategoryByKey, nextAccountFilter,
     validateExport, toCSV, mergeCategorizedSession, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
     exportAccountsJSON, importAccountsJSON, isValidLast4, ALL_SUBS, VALID_CATS,
   } = lib;
@@ -175,6 +175,29 @@ function runTests() {
     test('given empty transactions array, returns empty array', () => {
       const result = filterByAccount([], new Set(['Chase *1234']));
       assertEqual(result.length, 0);
+    });
+  });
+
+  // ── nextAccountFilter ─────────────────────────────────────────────────────
+  suite('nextAccountFilter', () => {
+    test('isolate returns a set containing only the given key', () => {
+      const r = nextAccountFilter(new Set(['A', 'B', 'C']), 'B', true);
+      assertEqual([...r], ['B']);
+    });
+    test('toggle removes an active key', () => {
+      const r = nextAccountFilter(new Set(['A', 'B']), 'A', false);
+      assert(!r.has('A'), 'A removed');
+      assert(r.has('B'), 'B kept');
+    });
+    test('toggle adds an inactive key', () => {
+      const r = nextAccountFilter(new Set(['A']), 'B', false);
+      assert(r.has('A'), 'A kept');
+      assert(r.has('B'), 'B added');
+    });
+    test('does not mutate the input set', () => {
+      const src = new Set(['A', 'B']);
+      nextAccountFilter(src, 'A', true);
+      assertEqual(src.size, 2);
     });
   });
 

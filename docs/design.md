@@ -154,6 +154,10 @@ Max offsets: `'this-month'` → 0 (cannot advance past current month); `'last-mo
 
 A row of toggle chips (`#budget-account-filter`) appears between the date range row and the search bar when two or more distinct account keys are present in `state.transactions`. Each chip shows the full account key (e.g. `"Chase *1234"`). All chips are active (indigo background, white text) by default; clicking a chip deactivates it (gray, strikethrough) and removes its account key from `budgetAccountFilter`. Clicking again re-adds it.
 
+**Double-click to isolate:** double-clicking a chip isolates the view to that account — `budgetAccountFilter` is set to `new Set([key])` so only that account's transactions are shown. Double-clicking a different chip switches the isolation; to show more accounts again, single-click the others back on (there is no dedicated "show all" control). The next filter state for both actions is produced by the pure `nextAccountFilter(current, key, isolate)` function (see §4).
+
+Because `renderAccountFilterChips()` rebuilds the chip row on every single-click (replacing the element the browser saw for the first click), native `dblclick` is unreliable, so single- vs double-click is disambiguated with a short timer: a single-click's toggle is deferred ~280 ms via module-level `accountChipClickTimer`/`accountChipClickKey`, and a second click on the **same** chip within that window promotes the action to *isolate* instead of toggling. A pending single-click on a **different** chip is flushed immediately so no toggle is lost. The timer state is cleared in `renderBudget()` on tab switch.
+
 `budgetAccountFilter` is a module-level `Set<string>` of active account keys, initialized from `state.transactions` in `renderBudget()` and reset on every tab switch. `renderBudgetRange()` applies `filterByAccount(dateFiltered, budgetAccountFilter)` after the date range filter. Chips are re-rendered by `renderAccountFilterChips()` on every toggle. When fewer than two distinct account keys exist in `state.transactions`, `#budget-account-filter` is hidden and filtering is not applied.
 
 ---
@@ -370,6 +374,7 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | `filterByMonth` | `(transactions, year: number, month: number) → Transaction[]` | Filters to a calendar month. `month` is **1-based** (1=January, 12=December). |
 | `filterByDateRange` | `(transactions, from: string\|null, to: string\|null) → Transaction[]` | Filters by ISO date bounds, both inclusive. Either bound may be `null` (unbounded on that side). |
 | `filterByAccount` | `(transactions, accountKeys: Set<string>) → Transaction[]` | Returns transactions whose `accountKey` is in the provided set. Empty set returns empty array. |
+| `nextAccountFilter` | `(current: Set<string>, key: string, isolate: boolean) → Set<string>` | Computes the next Budget account filter. When `isolate` is true (double-click), returns `new Set([key])` — only that account. Otherwise (single-click) returns a copy of `current` with `key` toggled in/out. Pure — does not mutate `current`. |
 | `filterBySearch` | `(transactions, query: string) → Transaction[]` | Case-insensitive match against `description`, `category`, `String(amount)`, and fix flag (`t.fix && 'fix'.includes(q)`). Returns all transactions when query is blank. |
 | `aggregateByCategory` | `(transactions, excludeParents?: string[]) → { groups, grandTotal }` | Groups by parent → subcategory. `groups[parent][sub] = { total, count }`. Skips uncategorized. Skips any parent listed in `excludeParents` (e.g. `['Transfer']`). |
 | `totalSpend` | `(transactions) → number` | Sum of all `amount` values. |

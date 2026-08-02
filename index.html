@@ -1261,6 +1261,8 @@ let budgetDetailPage     = 0;
 let currentBudgetTx      = [];
 let budgetSelectedSub    = null; // null = chart panel; string = active detail sub
 let budgetAccountFilter  = new Set();
+let accountChipClickTimer = null;
+let accountChipClickKey   = null;
 let selectedIdxs = new Set();
 let multiSelectMode = false;
 let focusedIdx = -1;
@@ -1277,6 +1279,16 @@ function filterByDateRange(transactions, from, to) {
 function filterByAccount(transactions, accountKeys) {
   if (!accountKeys || accountKeys.size === 0) return [];
   return transactions.filter(t => accountKeys.has(t.accountKey));
+}
+
+// Next Budget account-filter state. isolate (double-click) → only that key;
+// otherwise toggle the key in/out of a copy. Pure — does not mutate `current`.
+function nextAccountFilter(current, key, isolate) {
+  if (isolate) return new Set([key]);
+  const next = new Set(current);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
 }
 
 function computePresetRange(preset) {
@@ -1440,6 +1452,7 @@ function renderBudget() {
   document.getElementById('budget-from-input').value = '';
   document.getElementById('budget-to-input').value = '';
   budgetAccountFilter = new Set(state.transactions.map(t => t.accountKey));
+  if (accountChipClickTimer) { clearTimeout(accountChipClickTimer); accountChipClickTimer = null; accountChipClickKey = null; }
   renderAccountFilterChips();
   renderBudgetRange();
 }
@@ -1464,10 +1477,36 @@ function renderAccountFilterChips() {
   el.querySelectorAll('[data-account-key]').forEach(chip => {
     chip.addEventListener('click', () => {
       const key = chip.dataset.accountKey;
-      if (budgetAccountFilter.has(key)) budgetAccountFilter.delete(key);
-      else budgetAccountFilter.add(key);
-      renderAccountFilterChips();
-      renderBudgetRange();
+      const applyFilter = (isolate) => {
+        budgetAccountFilter = nextAccountFilter(budgetAccountFilter, key, isolate);
+        renderAccountFilterChips();
+        renderBudgetRange();
+      };
+      // Second click on the SAME chip within the window → double-click → isolate
+      if (accountChipClickTimer && accountChipClickKey === key) {
+        clearTimeout(accountChipClickTimer);
+        accountChipClickTimer = null;
+        accountChipClickKey = null;
+        applyFilter(true);
+        return;
+      }
+      // A pending single-click on a DIFFERENT chip → flush it as a toggle first
+      if (accountChipClickTimer) {
+        clearTimeout(accountChipClickTimer);
+        const pendingKey = accountChipClickKey;
+        accountChipClickTimer = null;
+        accountChipClickKey = null;
+        budgetAccountFilter = nextAccountFilter(budgetAccountFilter, pendingKey, false);
+        renderAccountFilterChips();
+        renderBudgetRange();
+      }
+      // Defer this single-click's toggle so a second click can promote to isolate
+      accountChipClickKey = key;
+      accountChipClickTimer = setTimeout(() => {
+        accountChipClickTimer = null;
+        accountChipClickKey = null;
+        applyFilter(false);
+      }, 280);
     });
   });
 }
@@ -2248,7 +2287,7 @@ function importAccountsJSON(jsonString) {
 
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
-  parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, filterBySearch, aggregateByCategory,
+  parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, nextAccountFilter, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, mergeCategorizedSession, getMonthList,
   exportAccountsJSON, importAccountsJSON, isValidLast4,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
