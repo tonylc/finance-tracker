@@ -79,4 +79,22 @@ test.describe('Holdings Aggregation', () => {
     const positionRows = page.locator('#port-tbody tr:not(.branch-row):not(.acct-row):not(.total-row)');
     await expect(positionRows).toHaveCount(2);
   });
+
+  test('two accounts sharing a branch appear under one branch header row', async ({ page }) => {
+    await seedAccounts(page, [
+      { id: 'v1', name: 'Brokerage', last4: '1111', branch: 'Robinhood',
+        inputCsvFormat: ['ticker', 'security_name', 'shares', 'cost_basis_per_share'] },
+      { id: 'v2', name: 'Roth IRA',  last4: '2222', branch: 'Robinhood',
+        inputCsvFormat: ['ticker', 'security_name', 'shares', 'cost_basis_per_share'] },
+    ]);
+    await seedHoldings(page, [
+      { id: 'h1', accountKey: 'Brokerage *1111', ticker: 'VTI', securityName: '', shares: 100, costBasis: 21500 },
+      { id: 'h2', accountKey: 'Roth IRA *2222',  ticker: 'VTI', securityName: '', shares: 50,  costBasis: 11000 },
+    ], { fetchedAt: '2026-05-21', prices: { VTI: 285.50 } });
+    await page.goto('index.html');
+    await goToView(page, 'portfolio');
+
+    await expect(page.locator('#port-tbody tr.branch-row')).toHaveCount(1);
+    await expect(page.locator('#port-tbody tr.branch-row')).toContainText('Robinhood');
+  });
 });

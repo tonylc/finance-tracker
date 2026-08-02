@@ -74,4 +74,19 @@ test.describe('Settings', () => {
 
     await expect(page.locator('#settings-empty')).toBeVisible();
   });
+
+  test('adding an account with a branch saves and displays the branch', async ({ page }) => {
+    await page.goto('index.html');
+    await goToView(page, 'settings');
+
+    await page.click('#settings-add-btn');
+    await page.fill('#sf-branch', 'Robinhood');
+    await page.fill('#sf-name', 'Brokerage');
+    await page.fill('#sf-last4', '1234');
+    await page.fill('#sf-format-input', '["ticker","shares"]');
+    await page.click('#sf-save-btn');
+
+    await expect(page.locator('#settings-tbody')).toContainText('Robinhood');
+    await expect(page.locator('#settings-tbody')).toContainText('Brokerage');
+  });
 });

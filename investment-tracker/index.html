@@ -523,11 +523,17 @@
       <h3 id="settings-form-title">Add Account</h3>
       <div class="form-row">
         <div class="field">
+          <label for="sf-branch">Branch / Brokerage <span style="font-weight:400;color:#888;">(optional)</span></label>
+          <input type="text" id="sf-branch" placeholder="e.g. Robinhood">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
           <label for="sf-name">Account Name</label>
-          <input type="text" id="sf-name" placeholder="e.g. Vanguard">
+          <input type="text" id="sf-name" placeholder="e.g. Brokerage">
         </div>
         <div class="field-sm">
-          <label for="sf-last4">Last 4 Digits</label>
+          <label for="sf-last4">Last 4</label>
           <input type="text" id="sf-last4" maxlength="4" placeholder="1234">
         </div>
       </div>
@@ -734,7 +740,7 @@ function aggregateHoldingsByTicker(holdings) {
 function getBranchFromAccountKey(accountKey, accounts) {
   if (accounts) {
     const match = accounts.find(a => formatAccountKey(a.name, a.last4) === accountKey);
-    if (match) return match.name;
+    if (match) return match.branch || match.name;
   }
   const idx = accountKey.indexOf(' *');
   return idx >= 0 ? accountKey.slice(0, idx) : accountKey;
@@ -1445,8 +1451,9 @@ function renderSettingsView() {
     tableEl.style.display = '';
     document.getElementById('settings-tbody').innerHTML = accounts.map(a => {
       const mapped = a.inputCsvFormat.filter(f => f !== null).length;
+      const label  = a.branch ? `${a.branch} — ${a.name}` : a.name;
       return `<tr>
-        <td><strong>${a.name}</strong></td>
+        <td><strong>${label}</strong></td>
         <td>${a.last4}</td>
         <td>${mapped} column${mapped !== 1 ? 's' : ''}</td>
         <td style="white-space:nowrap;">
@@ -1461,12 +1468,13 @@ function renderSettingsView() {
 document.getElementById('settings-add-btn').addEventListener('click', () => {
   editingAccountId = null;
   document.getElementById('settings-form-title').textContent = 'Add Account';
-  document.getElementById('sf-name').value        = '';
-  document.getElementById('sf-last4').value       = '';
+  document.getElementById('sf-branch').value       = '';
+  document.getElementById('sf-name').value         = '';
+  document.getElementById('sf-last4').value        = '';
   document.getElementById('sf-format-input').value = '';
   document.getElementById('sf-form-error').style.display = 'none';
   document.getElementById('settings-form-card').style.display = '';
-  document.getElementById('sf-name').focus();
+  document.getElementById('sf-branch').focus();
 });
 
 function editAccount(id) {
@@ -1474,9 +1482,10 @@ function editAccount(id) {
   if (!a) return;
   editingAccountId = id;
   document.getElementById('settings-form-title').textContent = 'Edit Account';
-  document.getElementById('sf-name').value         = a.name;
-  document.getElementById('sf-last4').value        = a.last4;
-  document.getElementById('sf-format-input').value = JSON.stringify(a.inputCsvFormat);
+  document.getElementById('sf-branch').value        = a.branch || '';
+  document.getElementById('sf-name').value          = a.name;
+  document.getElementById('sf-last4').value         = a.last4;
+  document.getElementById('sf-format-input').value  = JSON.stringify(a.inputCsvFormat);
   document.getElementById('sf-form-error').style.display = 'none';
   document.getElementById('settings-form-card').style.display = '';
   document.getElementById('sf-name').focus();
@@ -1496,6 +1505,7 @@ document.getElementById('sf-cancel-btn').addEventListener('click', () => {
 });
 
 document.getElementById('sf-save-btn').addEventListener('click', () => {
+  const branch     = document.getElementById('sf-branch').value.trim() || undefined;
   const name       = document.getElementById('sf-name').value.trim();
   const last4      = document.getElementById('sf-last4').value.trim();
   const formatRaw  = document.getElementById('sf-format-input').value.trim();
@@ -1514,9 +1524,9 @@ document.getElementById('sf-save-btn').addEventListener('click', () => {
 
   if (editingAccountId) {
     const acct = state.userConfig.accounts.find(a => a.id === editingAccountId);
-    if (acct) { acct.name = name; acct.last4 = last4; acct.inputCsvFormat = fmt; }
+    if (acct) { acct.branch = branch; acct.name = name; acct.last4 = last4; acct.inputCsvFormat = fmt; }
   } else {
-    state.userConfig.accounts.push({ id: crypto.randomUUID(), name, last4, inputCsvFormat: fmt });
+    state.userConfig.accounts.push({ id: crypto.randomUUID(), branch, name, last4, inputCsvFormat: fmt });
   }
 
   saveConfig();

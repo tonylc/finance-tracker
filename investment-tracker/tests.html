@@ -482,16 +482,16 @@ function runTests() {
   // ══ §getBranchFromAccountKey ═════════════════════════════════════════════
   suite('getBranchFromAccountKey', () => {
     const accounts = [
-      { id: '1', name: 'Vanguard', last4: '1234', inputCsvFormat: ['ticker', 'shares'] },
-      { id: '2', name: 'Robinhood', last4: '5678', inputCsvFormat: ['ticker', 'shares'] },
+      { id: '1', name: 'Vanguard', last4: '1234', inputCsvFormat: [] },
+      { id: '2', name: 'Robinhood Brokerage', last4: '5678', branch: 'Robinhood', inputCsvFormat: [] },
     ];
 
-    test('returns account name when profile matches', () => {
+    test('returns account name when no branch field set', () => {
       assertEqual(getBranchFromAccountKey('Vanguard *1234', accounts), 'Vanguard');
     });
 
-    test('returns correct branch for second account', () => {
-      assertEqual(getBranchFromAccountKey('Robinhood *5678', accounts), 'Robinhood');
+    test('prefers account.branch over account.name when branch is set', () => {
+      assertEqual(getBranchFromAccountKey('Robinhood Brokerage *5678', accounts), 'Robinhood');
     });
 
     test('falls back to text before " *" when no profile matches', () => {
