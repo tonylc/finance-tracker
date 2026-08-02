@@ -868,6 +868,26 @@ function saveConfig() {
   localStorage.setItem('investmentTrackerConfig', JSON.stringify(state.userConfig));
 }
 
+function migrateSnapshots(snapshots) {
+  let dirty = false;
+  const migrated = snapshots.map(s => {
+    if (!s.accounts || typeof s.accounts !== 'object') return s;
+    let changed = false;
+    const accounts = {};
+    for (const [key, val] of Object.entries(s.accounts)) {
+      if (typeof val === 'number') {
+        accounts[key] = { value: val, costBasis: 0 };
+        changed = true;
+      } else {
+        accounts[key] = val;
+      }
+    }
+    if (changed) { dirty = true; return { ...s, accounts }; }
+    return s;
+  });
+  return { snapshots: migrated, dirty };
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem('investmentTrackerData');
@@ -875,7 +895,9 @@ function loadData() {
       const d = JSON.parse(raw);
       state.holdings = d.holdings || [];
       state.currentPrices = d.currentPrices || null;
-      state.networthSnapshots = d.networthSnapshots || [];
+      const { snapshots, dirty } = migrateSnapshots(d.networthSnapshots || []);
+      state.networthSnapshots = snapshots;
+      if (dirty) saveData();
     }
   } catch (_) {}
 }
@@ -1615,7 +1637,7 @@ window.__investmentLib = {
   buildHoldingsHeaderMap, validateHoldingsImport, parseHolding,
   replaceHoldings, getTrackedTickers,
   computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
-  aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary, buildHistoryTree,
+  aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary, buildHistoryTree, migrateSnapshots,
   formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
   fmtCurrency, fmtPercent, fmtShares,
 };

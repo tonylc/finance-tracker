@@ -83,7 +83,7 @@ function runTests() {
     replaceHoldings, getTrackedTickers,
     computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
     aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary,
-    buildHistoryTree,
+    buildHistoryTree, migrateSnapshots,
     formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
     fmtCurrency, fmtPercent, fmtShares,
     parseCSV,
@@ -624,6 +624,49 @@ function runTests() {
       const accts = tree[0].branches[0].accounts;
       assertEqual(accts[0].key, 'Brokerage *1111');
       assertEqual(accts[1].key, 'Roth IRA *2222');
+    });
+  });
+
+  // ══ §migrateSnapshots ════════════════════════════════════════════════════
+  suite('migrateSnapshots', () => {
+    test('already-migrated snapshots are returned unchanged with dirty=false', () => {
+      const snaps = [{ id: 's1', date: '2026-01-01', totalValue: 100, totalCostBasis: 80,
+        accounts: { 'Robinhood *1111': { value: 100, costBasis: 80 } } }];
+      const { snapshots, dirty } = migrateSnapshots(snaps);
+      assertEqual(dirty, false);
+      assertEqual(snapshots[0].accounts['Robinhood *1111'].value, 100);
+      assertEqual(snapshots[0].accounts['Robinhood *1111'].costBasis, 80);
+    });
+
+    test('numeric account values are converted to { value, costBasis: 0 } and dirty=true', () => {
+      const snaps = [{ id: 's1', date: '2026-01-01', totalValue: 5200, totalCostBasis: 0,
+        accounts: { 'Robinhood *1111': 5200, 'Vanguard *2222': 3000 } }];
+      const { snapshots, dirty } = migrateSnapshots(snaps);
+      assertEqual(dirty, true);
+      assertEqual(snapshots[0].accounts['Robinhood *1111'].value, 5200);
+      assertEqual(snapshots[0].accounts['Robinhood *1111'].costBasis, 0);
+      assertEqual(snapshots[0].accounts['Vanguard *2222'].value, 3000);
+    });
+
+    test('mixed snapshots: only old-format ones are migrated', () => {
+      const snaps = [
+        { id: 's1', date: '2026-01-01', totalValue: 100, totalCostBasis: 80,
+          accounts: { 'Robinhood *1111': { value: 100, costBasis: 80 } } },
+        { id: 's2', date: '2026-02-01', totalValue: 200, totalCostBasis: 0,
+          accounts: { 'Vanguard *2222': 200 } },
+      ];
+      const { snapshots, dirty } = migrateSnapshots(snaps);
+      assertEqual(dirty, true);
+      assertEqual(snapshots[0].accounts['Robinhood *1111'].costBasis, 80);
+      assertEqual(snapshots[1].accounts['Vanguard *2222'].value, 200);
+      assertEqual(snapshots[1].accounts['Vanguard *2222'].costBasis, 0);
+    });
+
+    test('snapshot with no accounts field is left untouched', () => {
+      const snaps = [{ id: 's1', date: '2026-01-01', totalValue: 100, totalCostBasis: 0 }];
+      const { snapshots, dirty } = migrateSnapshots(snaps);
+      assertEqual(dirty, false);
+      assertEqual(snapshots[0].accounts, undefined);
     });
   });
 
