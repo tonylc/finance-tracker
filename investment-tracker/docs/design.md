@@ -57,15 +57,15 @@ Manage the current price set used by Portfolio.
 
 ### 2.4 History
 
-Networth snapshots over time, grouped by branch.
+Networth snapshots over time. The table uses a 3-level hierarchy built by `buildHistoryTree`.
 
 - **Sparkline chart** — SVG line chart of `totalValue` across all saved snapshots (oldest→newest)
-- **Snapshots table** — grouped by branch; columns: Branch/Date, Value, Cost Basis, Gain/Loss, Return
-  - **Branch header row** (`history-branch-header-row`) — branch name with its most-recent snapshot's totals; no delete button
-  - **Date sub-row** (`history-date-row`) — per-snapshot values for that branch, indented; delete button removes the snapshot
-  - Branches sorted alphabetically; date sub-rows within each branch sorted newest-first
+- **Snapshots table** — columns: Date/Branch/Account, Value, Cost Basis, Gain/Loss, Return
+  - **Date header row** (`history-date-header-row`) — snapshot date with combined `totalValue` / `totalCostBasis`; delete button removes the snapshot
+  - **Branch sub-row** (`history-branch-row`) — branch name with summed totals for all accounts in that branch on that date; indented
+  - **Account sub-row** (`history-account-row`) — individual account key and its value/cost; double-indented
+  - Dates sorted newest-first; branches alphabetically within each date; accounts alphabetically by key within each branch
 - Snapshots store account-level breakdowns; per-position history is not stored
-- Snapshots without account-level data are not displayed in the branch view
 
 #### History Branch Totals
 
@@ -194,6 +194,12 @@ Required: `"ticker"` and `"shares"`. If neither `"cost_basis"` nor `"cost_basis_
 | `fmtCurrency(n)` | `$28,550.00` / `-$500.00` / `—` (null) |
 | `fmtPercent(n)` | `+12.34%` / `-5.50%` / `—` (null) |
 | `fmtShares(n)` | `100` / `100.5` / `1234.567891` / `—` (null) |
+
+### History Display
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `buildHistoryTree` | `(snapshots, accounts) → DateEntry[]` | Transforms raw snapshots into a 3-level display tree. Each `DateEntry` has `{ date, totalValue, totalCostBasis, snapId, branches[] }`. Each branch has `{ name, value, costBasis, accounts[] }`. Each account has `{ key, value, costBasis }`. Dates newest-first; branches alphabetical; accounts alphabetical by key. |
 
 ### Settings / Utilities
 

@@ -83,6 +83,7 @@ function runTests() {
     replaceHoldings, getTrackedTickers,
     computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
     aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary,
+    buildHistoryTree,
     formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
     fmtCurrency, fmtPercent, fmtShares,
     parseCSV,
@@ -532,6 +533,97 @@ function runTests() {
       const result = computeBranchSummary(accountTotals, accts);
       assertEqual(result['Robinhood'].value, 15000);
       assertEqual(result['Robinhood'].costBasis, 12000);
+    });
+  });
+
+  // ══ §buildHistoryTree ════════════════════════════════════════════════════
+  suite('buildHistoryTree', () => {
+    const vanguardAcct = { id: 'v1', name: 'Vanguard',  last4: '1234', inputCsvFormat: ['ticker','shares'] };
+    const robinhoodAcct= { id: 'r1', name: 'Robinhood', last4: '5678', inputCsvFormat: ['ticker','shares'] };
+    const brokAcct     = { id: 'r2', name: 'Brokerage', last4: '1111', branch: 'Robinhood', inputCsvFormat: ['ticker','shares'] };
+    const iraAcct      = { id: 'r3', name: 'Roth IRA',  last4: '2222', branch: 'Robinhood', inputCsvFormat: ['ticker','shares'] };
+
+    test('one snapshot with one account produces one date entry with one branch and one account row', () => {
+      const tree = buildHistoryTree([
+        { id: 's1', date: '2026-05-21',
+          accounts: { 'Vanguard *1234': { value: 28550, costBasis: 21500 } },
+          totalValue: 28550, totalCostBasis: 21500 },
+      ], [vanguardAcct]);
+      assertEqual(tree.length, 1);
+      assertEqual(tree[0].date, '2026-05-21');
+      assertEqual(tree[0].totalValue, 28550);
+      assertEqual(tree[0].branches.length, 1);
+      assertEqual(tree[0].branches[0].name, 'Vanguard');
+      assertEqual(tree[0].branches[0].accounts.length, 1);
+    });
+
+    test('two accounts sharing a branch are summed into one branch entry', () => {
+      const tree = buildHistoryTree([
+        { id: 's1', date: '2026-05-21',
+          accounts: {
+            'Brokerage *1111': { value: 5200, costBasis: 4100 },
+            'Roth IRA *2222':  { value: 3000, costBasis: 2500 },
+          },
+          totalValue: 8200, totalCostBasis: 6600 },
+      ], [brokAcct, iraAcct]);
+      const branches = tree[0].branches;
+      assertEqual(branches.length, 1);
+      assertEqual(branches[0].name, 'Robinhood');
+      assertEqual(branches[0].value, 8200);
+      assertEqual(branches[0].costBasis, 6600);
+      assertEqual(branches[0].accounts.length, 2);
+    });
+
+    test('two accounts with different branches appear as separate branch entries', () => {
+      const tree = buildHistoryTree([
+        { id: 's1', date: '2026-05-21',
+          accounts: {
+            'Vanguard *1234':  { value: 28550, costBasis: 21500 },
+            'Robinhood *5678': { value: 5200,  costBasis: 4100  },
+          },
+          totalValue: 33750, totalCostBasis: 25600 },
+      ], [vanguardAcct, robinhoodAcct]);
+      assertEqual(tree[0].branches.length, 2);
+    });
+
+    test('branches are sorted alphabetically', () => {
+      const tree = buildHistoryTree([
+        { id: 's1', date: '2026-05-21',
+          accounts: {
+            'Robinhood *5678': { value: 5200,  costBasis: 4100  },
+            'Vanguard *1234':  { value: 28550, costBasis: 21500 },
+          },
+          totalValue: 33750, totalCostBasis: 25600 },
+      ], [vanguardAcct, robinhoodAcct]);
+      assertEqual(tree[0].branches[0].name, 'Robinhood');
+      assertEqual(tree[0].branches[1].name, 'Vanguard');
+    });
+
+    test('snapshots are sorted newest-first', () => {
+      const tree = buildHistoryTree([
+        { id: 's1', date: '2026-05-01',
+          accounts: { 'Vanguard *1234': { value: 26000, costBasis: 21500 } },
+          totalValue: 26000, totalCostBasis: 21500 },
+        { id: 's2', date: '2026-05-21',
+          accounts: { 'Vanguard *1234': { value: 28550, costBasis: 21500 } },
+          totalValue: 28550, totalCostBasis: 21500 },
+      ], [vanguardAcct]);
+      assertEqual(tree[0].date, '2026-05-21');
+      assertEqual(tree[1].date, '2026-05-01');
+    });
+
+    test('accounts within a branch are sorted alphabetically by key', () => {
+      const tree = buildHistoryTree([
+        { id: 's1', date: '2026-05-21',
+          accounts: {
+            'Roth IRA *2222':  { value: 3000, costBasis: 2500 },
+            'Brokerage *1111': { value: 5200, costBasis: 4100 },
+          },
+          totalValue: 8200, totalCostBasis: 6600 },
+      ], [brokAcct, iraAcct]);
+      const accts = tree[0].branches[0].accounts;
+      assertEqual(accts[0].key, 'Brokerage *1111');
+      assertEqual(accts[1].key, 'Roth IRA *2222');
     });
   });
 

@@ -231,26 +231,34 @@
 
   /* ── History table ── */
   .history-table tr.selected-row td { background: #f0f7ff; }
-  .history-table tr.history-branch-header-row td {
+  .history-table tr.history-date-header-row td {
     background: #1a1a2e;
     color: #fff;
     font-weight: 700;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: .5px;
+    font-size: 13px;
     border-top: 3px solid #0d0d1a;
   }
-  .history-table tr.history-branch-header-row td.gain-pos { color: #81c784; }
-  .history-table tr.history-branch-header-row td.gain-neg { color: #ef9a9a; }
-  .history-table tr.history-date-row td {
-    background: #fafafa;
+  .history-table tr.history-date-header-row td.gain-pos { color: #81c784; }
+  .history-table tr.history-date-header-row td.gain-neg { color: #ef9a9a; }
+  .history-table tr.history-branch-row td {
+    background: #eef0f8;
     font-size: 12px;
     border-top: none;
     padding-top: 3px;
     padding-bottom: 3px;
   }
-  .history-table tr.history-date-row td.gain-pos { color: #2e7d32; }
-  .history-table tr.history-date-row td.gain-neg { color: #c62828; }
+  .history-table tr.history-branch-row td.gain-pos { color: #2e7d32; }
+  .history-table tr.history-branch-row td.gain-neg { color: #c62828; }
+  .history-table tr.history-account-row td {
+    background: #fafafa;
+    font-size: 11px;
+    color: #555;
+    border-top: none;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .history-table tr.history-account-row td.gain-pos { color: #388e3c; }
+  .history-table tr.history-account-row td.gain-neg { color: #d32f2f; }
 
   /* ── Spinner ── */
   .spinner {
@@ -765,6 +773,29 @@ function computeBranchSummary(accountTotals, accounts) {
     result[branch].costBasis += totals.costBasis;
   }
   return result;
+}
+
+function buildHistoryTree(snapshots, accounts) {
+  const sorted = [...snapshots].sort((a, b) => b.date.localeCompare(a.date));
+  return sorted.map(s => {
+    const branchMap = {};
+    for (const [key, totals] of Object.entries(s.accounts || {})) {
+      const branch = getBranchFromAccountKey(key, accounts);
+      if (!branchMap[branch]) branchMap[branch] = { value: 0, costBasis: 0, accounts: [] };
+      branchMap[branch].value     += totals.value;
+      branchMap[branch].costBasis += totals.costBasis;
+      branchMap[branch].accounts.push({ key, value: totals.value, costBasis: totals.costBasis });
+    }
+    const branches = Object.entries(branchMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, data]) => ({
+        name,
+        value: data.value,
+        costBasis: data.costBasis,
+        accounts: data.accounts.sort((a, b) => a.key.localeCompare(b.key)),
+      }));
+    return { date: s.date, totalValue: s.totalValue, totalCostBasis: s.totalCostBasis, snapId: s.id, branches };
+  });
 }
 
 // ── Formatting ───────────────────────────────────
@@ -1336,11 +1367,10 @@ document.getElementById('prices-save-btn').addEventListener('click', () => {
 //  HISTORY VIEW
 // ══════════════════════════════════════════════════
 function renderHistoryView() {
-  const snaps = [...state.networthSnapshots].sort((a, b) => b.date.localeCompare(a.date)); // newest first
   const emptyEl = document.getElementById('history-empty');
   const mainEl  = document.getElementById('history-main');
 
-  if (snaps.length === 0) {
+  if (state.networthSnapshots.length === 0) {
     emptyEl.style.display = '';
     mainEl.style.display  = 'none';
     return;
@@ -1348,52 +1378,47 @@ function renderHistoryView() {
   emptyEl.style.display = 'none';
   mainEl.style.display  = '';
 
-  // SVG sparkline (oldest-first)
-  document.getElementById('history-chart').innerHTML = buildSparkline([...snaps].reverse());
+  const snapsSorted = [...state.networthSnapshots].sort((a, b) => a.date.localeCompare(b.date));
+  document.getElementById('history-chart').innerHTML = buildSparkline(snapsSorted);
 
-  // Build branch map: branch → [{date, value, costBasis, snapId}] (newest-first)
-  const accounts = state.userConfig.accounts;
-  const branchMap = new Map();
-  for (const s of snaps) {
-    const summary = s.accounts ? computeBranchSummary(s.accounts, accounts) : {};
-    for (const [branch, totals] of Object.entries(summary)) {
-      if (!branchMap.has(branch)) branchMap.set(branch, []);
-      branchMap.get(branch).push({ date: s.date, value: totals.value, costBasis: totals.costBasis, snapId: s.id });
-    }
-  }
-
+  const tree = buildHistoryTree(state.networthSnapshots, state.userConfig.accounts);
   let html = '';
-  for (const branch of [...branchMap.keys()].sort()) {
-    const entries = branchMap.get(branch);
-    const latest  = entries[0]; // most recent snapshot for this branch
-    const gain    = latest.value - latest.costBasis;
-    const pct     = latest.costBasis > 0 ? (gain / latest.costBasis) * 100 : null;
-
-    html += `<tr class="history-branch-header-row">
-      <td>${branch}</td>
-      <td class="td-num">${fmtCurrency(latest.value)}</td>
-      <td class="td-num">${fmtCurrency(latest.costBasis)}</td>
+  for (const entry of tree) {
+    const gain = entry.totalValue - entry.totalCostBasis;
+    const pct  = entry.totalCostBasis > 0 ? (gain / entry.totalCostBasis) * 100 : null;
+    html += `<tr class="history-date-header-row">
+      <td>${entry.date}</td>
+      <td class="td-num">${fmtCurrency(entry.totalValue)}</td>
+      <td class="td-num">${fmtCurrency(entry.totalCostBasis)}</td>
       <td class="td-gain ${gainClass(gain)}">${fmtCurrency(gain)}</td>
       <td class="td-gain ${gainClass(pct)}">${fmtPercent(pct)}</td>
-      <td></td>
+      <td><button class="btn-secondary btn-sm" onclick="deleteSnapshot('${entry.snapId}')" title="Delete snapshot" style="color:#c62828;border-color:#f5c6cb;">✕</button></td>
     </tr>`;
-
-    html += entries.map(e => {
-      const eg = e.value - e.costBasis;
-      const ep = e.costBasis > 0 ? (eg / e.costBasis) * 100 : null;
-      return `<tr class="history-date-row">
-        <td style="padding-left:24px;">${e.date}</td>
-        <td class="td-num">${fmtCurrency(e.value)}</td>
-        <td class="td-num">${fmtCurrency(e.costBasis)}</td>
-        <td class="td-gain ${gainClass(eg)}">${fmtCurrency(eg)}</td>
-        <td class="td-gain ${gainClass(ep)}">${fmtPercent(ep)}</td>
-        <td>
-          <button class="btn-secondary btn-sm" onclick="deleteSnapshot('${e.snapId}')" title="Delete snapshot" style="color:#c62828;border-color:#f5c6cb;">✕</button>
-        </td>
+    for (const branch of entry.branches) {
+      const bg = branch.value - branch.costBasis;
+      const bp = branch.costBasis > 0 ? (bg / branch.costBasis) * 100 : null;
+      html += `<tr class="history-branch-row">
+        <td style="padding-left:20px;">${branch.name}</td>
+        <td class="td-num">${fmtCurrency(branch.value)}</td>
+        <td class="td-num">${fmtCurrency(branch.costBasis)}</td>
+        <td class="td-gain ${gainClass(bg)}">${fmtCurrency(bg)}</td>
+        <td class="td-gain ${gainClass(bp)}">${fmtPercent(bp)}</td>
+        <td></td>
       </tr>`;
-    }).join('');
+      for (const acct of branch.accounts) {
+        const ag = acct.value - acct.costBasis;
+        const ap = acct.costBasis > 0 ? (ag / acct.costBasis) * 100 : null;
+        html += `<tr class="history-account-row">
+          <td style="padding-left:40px;">${acct.key}</td>
+          <td class="td-num">${fmtCurrency(acct.value)}</td>
+          <td class="td-num">${fmtCurrency(acct.costBasis)}</td>
+          <td class="td-gain ${gainClass(ag)}">${fmtCurrency(ag)}</td>
+          <td class="td-gain ${gainClass(ap)}">${fmtPercent(ap)}</td>
+          <td></td>
+        </tr>`;
+      }
+    }
   }
-
   document.getElementById('history-tbody').innerHTML = html;
 }
 
@@ -1590,7 +1615,7 @@ window.__investmentLib = {
   buildHoldingsHeaderMap, validateHoldingsImport, parseHolding,
   replaceHoldings, getTrackedTickers,
   computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
-  aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary,
+  aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary, buildHistoryTree,
   formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
   fmtCurrency, fmtPercent, fmtShares,
 };
