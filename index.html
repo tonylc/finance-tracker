@@ -1568,7 +1568,7 @@ function appendTxRows(tbody, txs) {
     const row = document.createElement('tr');
     row.className = 'tx-row';
     row.innerHTML = `
-      <td>${t.date}</td>
+      <td class="td-date">${t.date}</td>
       <td>${t.description}</td>
       <td style="font-size:11px;color:#555;">${t.category || '—'}</td>
       <td style="font-size:11px;color:#888;">${t.fix ? 'fix' : ''}</td>

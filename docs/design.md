@@ -128,7 +128,7 @@ Transactions in the **Transfer** parent category (subcategory: "Credit Card Paym
 
 #### Full Transaction List
 
-`#budget-tx-tbody` is populated with all transactions in the active range, sorted by date descending (newest first), paginated 100 rows per page. Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
+`#budget-tx-tbody` is populated with all transactions in the active range, sorted by date descending (newest first), paginated 100 rows per page. Shown below the bar chart. Columns: Date, Description, Category, Fix, Amount. The Date cell uses the `.td-date` class (`white-space: nowrap`) so ISO dates stay on one line rather than wrapping. The Account field is hidden by default — clicking any row toggles a detail sub-row (spanning all columns) showing the account key. Both the main list and the detail panel share the same column structure and row-click expand behavior, rendered by the shared `appendTxRows(tbody, txs)` helper.
 
 #### Transaction Pagination
 
