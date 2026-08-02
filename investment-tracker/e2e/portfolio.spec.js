@@ -42,9 +42,9 @@ test.describe('Portfolio View', () => {
     await page.click('#port-snapshot-btn');
     await expect(page.locator('#port-snapshot-btn')).toContainText('Saved!');
 
-    // Navigate to history and verify snapshot appears
+    // Navigate to history and verify snapshot appears (branch header + date sub-row = 2 rows)
     await goToView(page, 'history');
-    await expect(page.locator('#history-tbody tr')).toHaveCount(1);
+    await expect(page.locator('#history-tbody .history-branch-header-row')).toHaveCount(1);
     await expect(page.locator('#history-tbody')).toContainText('32,260');
   });
 });

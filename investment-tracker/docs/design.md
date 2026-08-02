@@ -57,12 +57,17 @@ Manage the current price set used by Portfolio.
 
 ### 2.4 History
 
-Networth snapshots over time.
+Networth snapshots over time, grouped by branch.
 
-- **Sparkline chart** — SVG line chart of `totalValue` across all saved snapshots
-- **Snapshots table** — Date, Total Value, Cost Basis, Gain/Loss, Return; each row has a delete button
-- Snapshots are sorted chronologically ascending
+- **Sparkline chart** — SVG line chart of `totalValue` across all saved snapshots (oldest→newest)
+- **Snapshots table** — grouped by branch; columns: Branch/Date, Value, Cost Basis, Gain/Loss, Return
+  - **Branch header row** (`history-branch-header-row`) — branch name with its most-recent snapshot's totals; no delete button
+  - **Date sub-row** (`history-date-row`) — per-snapshot values for that branch, indented; delete button removes the snapshot
+  - Branches sorted alphabetically; date sub-rows within each branch sorted newest-first
 - Snapshots store account-level breakdowns; per-position history is not stored
+- Snapshots without account-level data are not displayed in the branch view
+
+#### History Branch Totals
 
 ### 2.5 Settings
 
