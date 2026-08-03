@@ -1213,8 +1213,8 @@ document.getElementById('port-snapshot-btn').addEventListener('click', () => {
   const priceMap  = state.currentPrices ? state.currentPrices.prices : {};
   const positions = computePortfolioValue(state.holdings, priceMap);
   const totals    = computeAccountTotals(positions);
-  const today     = new Date().toISOString().slice(0, 10);
-  const snapshot  = buildNetworthSnapshot(totals, today);
+  const date     = state.currentPrices ? state.currentPrices.fetchedAt : new Date().toISOString().slice(0, 10);
+  const snapshot  = buildNetworthSnapshot(totals, date);
   state.networthSnapshots.push(snapshot);
   saveData();
 
