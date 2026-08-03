@@ -495,8 +495,17 @@ function runTests() {
       assertEqual(getBranchFromAccountKey('Robinhood Brokerage *5678', accounts), 'Robinhood');
     });
 
-    test('falls back to text before " *" when no profile matches', () => {
+    test('falls back to first token before " *" when no profile matches (single-word prefix)', () => {
       assertEqual(getBranchFromAccountKey('Fidelity *9999', accounts), 'Fidelity');
+    });
+
+    test('old-format key with branch prefix embedded — returns only first token as branch', () => {
+      // e.g. snapshot saved when account was named "Vanguard Rollover IRA" but now profile is "Rollover IRA"
+      assertEqual(getBranchFromAccountKey('Vanguard Rollover IRA *7816', accounts), 'Vanguard');
+    });
+
+    test('old-format key with multi-word branch prefix — returns only first token', () => {
+      assertEqual(getBranchFromAccountKey('Merrill Chen Trust *4309', accounts), 'Merrill');
     });
 
     test('falls back to full key when no " *" present', () => {

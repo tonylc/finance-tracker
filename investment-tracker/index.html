@@ -761,7 +761,8 @@ function getBranchFromAccountKey(accountKey, accounts) {
     if (match) return match.branch || match.name;
   }
   const idx = accountKey.indexOf(' *');
-  return idx >= 0 ? accountKey.slice(0, idx) : accountKey;
+  const prefix = idx >= 0 ? accountKey.slice(0, idx) : accountKey;
+  return prefix.split(' ')[0];
 }
 
 function computeBranchSummary(accountTotals, accounts) {
