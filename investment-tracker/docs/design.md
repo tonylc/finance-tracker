@@ -71,12 +71,16 @@ Networth snapshots over time. The table uses a 3-level hierarchy built by `build
 
 ### 2.5 Settings
 
-Configure broker account profiles.
+Configure broker account profiles and export/import full tracker backups.
 
 - **Account profile table** — Name, Last 4, Columns Mapped; Edit / Delete per row
-- **Add / Edit form** — Name, Last 4 digits (required, exactly 4 digits), Column Format (JSON array)
-- **Export Settings** — minified JSON of all account profiles; copy to clipboard/paste elsewhere
-- **Import Settings** — paste exported JSON to restore account profiles in another browser
+- **Add / Edit form** — Branch (optional), Name, Last 4 digits (required, 4 alphanumeric characters), Column Format (JSON array)
+- **Export Data** — minified JSON backup of all tracker state (`accounts`, `holdings`, `currentPrices`, `networthSnapshots`) with pretty-printed preview; copy to clipboard/paste elsewhere
+- **Import Data** — paste exported JSON backup to replace all current accounts, holdings, prices, and history snapshots in another browser
+
+#### Full Backup Export & Import
+
+`exportBackupJSON` serializes `{ accounts, holdings, currentPrices, networthSnapshots }` into a single minified JSON string. `importBackupJSON` validates the structure and all four collections before replacing `state.userConfig.accounts`, `state.holdings`, `state.currentPrices`, and `state.networthSnapshots` and persisting to both `investmentTrackerConfig` and `investmentTrackerData` in `localStorage`.
 
 ---
 
@@ -209,3 +213,5 @@ Required: `"ticker"` and `"shares"`. If neither `"cost_basis"` nor `"cost_basis_
 | `isValidLast4(val)` | Returns `true` for exactly 4 digits |
 | `exportAccountsJSON(accounts)` | Minified JSON string of account array |
 | `importAccountsJSON(str)` | `{ ok: true, accounts }` or `{ ok: false, error }` |
+| `exportBackupJSON(data)` | Minified JSON string of `{ accounts, holdings, currentPrices, networthSnapshots }` |
+| `importBackupJSON(str)` | Validates full backup JSON; returns `{ ok: true, data: { accounts, holdings, currentPrices, networthSnapshots } }` or `{ ok: false, error }` |

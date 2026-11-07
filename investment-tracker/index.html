@@ -517,9 +517,9 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 12px;">Export Settings</h3>
-      <p style="font-size:12px;color:#777;margin-bottom:10px;">Save your account configurations as JSON to restore them in another browser.</p>
-      <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
+      <h3 style="margin:0 0 12px;">Export Data</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Save all your accounts, portfolio holdings, current prices, and history snapshots as JSON to restore them on another computer.</p>
+      <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Data</button>
       <div id="settings-export-section" style="display:none;margin-top:12px;">
         <label for="settings-export-field" style="font-size:12px;color:#555;">Minified JSON (copy this)</label>
         <textarea id="settings-export-field" readonly rows="3" style="font-family:monospace;font-size:11px;margin-top:4px;"></textarea>
@@ -529,12 +529,13 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 12px;">Import Settings</h3>
-      <p style="font-size:12px;color:#777;margin-bottom:10px;">Paste a previously exported JSON blob to replace your current account configurations.</p>
+      <h3 style="margin:0 0 12px;">Import Data</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Paste a previously exported JSON backup to replace your current accounts, holdings, prices, and history snapshots.</p>
       <label for="settings-import-field" style="font-size:12px;color:#555;">Paste JSON here</label>
-      <textarea id="settings-import-field" rows="3" placeholder='[{"id":"...","name":"...","last4":"...","inputCsvFormat":[...]}]' style="font-family:monospace;font-size:11px;margin-top:4px;"></textarea>
+      <textarea id="settings-import-field" rows="3" placeholder='{"accounts":[...],"holdings":[...],"currentPrices":{...},"networthSnapshots":[...]}' style="font-family:monospace;font-size:11px;margin-top:4px;"></textarea>
       <div id="settings-import-error" class="alert alert-error" style="display:none;margin-top:8px;"></div>
-      <button class="btn btn-primary btn-sm" id="settings-import-btn" style="margin-top:8px;">Import Settings</button>
+      <div id="settings-import-success" class="alert alert-success" style="display:none;margin-top:8px;"></div>
+      <button class="btn btn-primary btn-sm" id="settings-import-btn" style="margin-top:8px;">Import Data</button>
     </div>
 
     <div class="card" id="settings-form-card" style="display:none;">
@@ -840,6 +841,98 @@ function importAccountsJSON(jsonString) {
     if (!Array.isArray(a.inputCsvFormat)) return { ok: false, error: `Account at index ${i} is missing a valid "inputCsvFormat" array.` };
   }
   return { ok: true, accounts: parsed };
+}
+
+function exportBackupJSON(data = {}) {
+  return JSON.stringify({
+    accounts: Array.isArray(data.accounts) ? data.accounts : [],
+    holdings: Array.isArray(data.holdings) ? data.holdings : [],
+    currentPrices: data.currentPrices || null,
+    networthSnapshots: Array.isArray(data.networthSnapshots) ? data.networthSnapshots : [],
+  });
+}
+
+function importBackupJSON(jsonString) {
+  let parsed;
+  try { parsed = JSON.parse(jsonString); } catch (e) { return { ok: false, error: 'Invalid JSON: ' + e.message }; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, error: 'Expected a JSON backup object containing accounts, holdings, currentPrices, and networthSnapshots.' };
+  }
+
+  // Validate accounts
+  if (!Array.isArray(parsed.accounts)) {
+    return { ok: false, error: 'Backup is missing a valid "accounts" array.' };
+  }
+  const accounts = [];
+  for (let i = 0; i < parsed.accounts.length; i++) {
+    const a = parsed.accounts[i];
+    if (!a || typeof a !== 'object') return { ok: false, error: `Account at index ${i} must be an object.` };
+    if (typeof a.name !== 'string' || !a.name.trim()) return { ok: false, error: `Account at index ${i} is missing a valid "name".` };
+    if (!isValidLast4(a.last4)) return { ok: false, error: `Account at index ${i}: "last4" must be exactly 4 alphanumeric characters.` };
+    if (!Array.isArray(a.inputCsvFormat)) return { ok: false, error: `Account at index ${i} is missing a valid "inputCsvFormat" array.` };
+    accounts.push({ ...a, id: a.id || crypto.randomUUID() });
+  }
+
+  // Validate holdings
+  if (!Array.isArray(parsed.holdings)) {
+    return { ok: false, error: 'Backup is missing a valid "holdings" array.' };
+  }
+  const holdings = [];
+  for (let i = 0; i < parsed.holdings.length; i++) {
+    const h = parsed.holdings[i];
+    if (!h || typeof h !== 'object') return { ok: false, error: `Holding at index ${i} must be an object.` };
+    if (typeof h.accountKey !== 'string' || !h.accountKey.trim()) return { ok: false, error: `Holding at index ${i} is missing a valid "accountKey".` };
+    if (typeof h.ticker !== 'string' || !h.ticker.trim()) return { ok: false, error: `Holding at index ${i} is missing a valid "ticker".` };
+    if (typeof h.shares !== 'number' || !isFinite(h.shares) || h.shares <= 0) return { ok: false, error: `Holding at index ${i}: "shares" must be a positive number.` };
+    const costBasis = h.costBasis == null ? 0 : h.costBasis;
+    if (typeof costBasis !== 'number' || !isFinite(costBasis) || costBasis < 0) return { ok: false, error: `Holding at index ${i}: "costBasis" must be a non-negative number.` };
+    holdings.push({
+      id: h.id || crypto.randomUUID(),
+      accountKey: h.accountKey,
+      ticker: h.ticker.trim().toUpperCase(),
+      securityName: typeof h.securityName === 'string' ? h.securityName : '',
+      shares: h.shares,
+      costBasis,
+    });
+  }
+
+  // Validate currentPrices
+  let currentPrices = null;
+  if (parsed.currentPrices != null) {
+    const cp = parsed.currentPrices;
+    if (typeof cp !== 'object' || Array.isArray(cp)) return { ok: false, error: '"currentPrices" must be an object or null.' };
+    if (typeof cp.fetchedAt !== 'string' || !cp.fetchedAt.trim()) return { ok: false, error: '"currentPrices.fetchedAt" must be a non-empty date string.' };
+    if (!cp.prices || typeof cp.prices !== 'object' || Array.isArray(cp.prices)) return { ok: false, error: '"currentPrices.prices" must be an object.' };
+    const prices = {};
+    for (const [ticker, price] of Object.entries(cp.prices)) {
+      if (typeof price !== 'number' || !isFinite(price) || price <= 0) {
+        return { ok: false, error: `Price for "${ticker}" must be a positive number.` };
+      }
+      prices[ticker] = price;
+    }
+    currentPrices = { fetchedAt: cp.fetchedAt, prices };
+  }
+
+  // Validate networthSnapshots
+  if (!Array.isArray(parsed.networthSnapshots)) {
+    return { ok: false, error: 'Backup is missing a valid "networthSnapshots" array.' };
+  }
+  const rawSnapshots = [];
+  for (let i = 0; i < parsed.networthSnapshots.length; i++) {
+    const s = parsed.networthSnapshots[i];
+    if (!s || typeof s !== 'object') return { ok: false, error: `Snapshot at index ${i} must be an object.` };
+    if (typeof s.date !== 'string' || !s.date.trim()) return { ok: false, error: `Snapshot at index ${i} is missing a valid "date".` };
+    if (typeof s.totalValue !== 'number' || !isFinite(s.totalValue)) return { ok: false, error: `Snapshot at index ${i}: "totalValue" must be a finite number.` };
+    if (typeof s.totalCostBasis !== 'number' || !isFinite(s.totalCostBasis)) return { ok: false, error: `Snapshot at index ${i}: "totalCostBasis" must be a finite number.` };
+    if (!s.accounts || typeof s.accounts !== 'object' || Array.isArray(s.accounts)) return { ok: false, error: `Snapshot at index ${i} is missing a valid "accounts" object.` };
+    rawSnapshots.push({ ...s, id: s.id || crypto.randomUUID() });
+  }
+  const { snapshots: networthSnapshots } = migrateSnapshots(rawSnapshots);
+
+  return {
+    ok: true,
+    data: { accounts, holdings, currentPrices, networthSnapshots },
+  };
 }
 
 // ══════════════════════════════════════════════════
@@ -1604,7 +1697,12 @@ document.getElementById('sf-save-btn').addEventListener('click', () => {
 document.getElementById('settings-export-btn').addEventListener('click', () => {
   const section = document.getElementById('settings-export-section');
   section.style.display = '';
-  const json = exportAccountsJSON(state.userConfig.accounts);
+  const json = exportBackupJSON({
+    accounts: state.userConfig.accounts,
+    holdings: state.holdings,
+    currentPrices: state.currentPrices,
+    networthSnapshots: state.networthSnapshots,
+  });
   document.getElementById('settings-export-field').value = json;
   document.getElementById('settings-export-pretty').textContent = JSON.stringify(JSON.parse(json), null, 2);
 });
@@ -1612,13 +1710,22 @@ document.getElementById('settings-export-btn').addEventListener('click', () => {
 document.getElementById('settings-import-btn').addEventListener('click', () => {
   const raw    = document.getElementById('settings-import-field').value.trim();
   const errEl  = document.getElementById('settings-import-error');
+  const okEl   = document.getElementById('settings-import-success');
   errEl.style.display = 'none';
-  if (!raw) { showError(errEl, 'Paste a JSON configuration first.'); return; }
-  const result = importAccountsJSON(raw);
+  okEl.style.display  = 'none';
+  if (!raw) { showError(errEl, 'Paste a JSON backup first.'); return; }
+  const result = importBackupJSON(raw);
   if (!result.ok) { showError(errEl, result.error); return; }
-  state.userConfig.accounts = result.accounts;
+  state.userConfig.accounts = result.data.accounts;
+  state.holdings            = result.data.holdings;
+  state.currentPrices       = result.data.currentPrices;
+  state.networthSnapshots   = result.data.networthSnapshots;
+  state.pendingPrices       = {};
   saveConfig();
+  saveData();
   document.getElementById('settings-import-field').value = '';
+  okEl.textContent = `Imported ${result.data.accounts.length} account(s), ${result.data.holdings.length} holding(s), and ${result.data.networthSnapshots.length} snapshot(s).`;
+  okEl.style.display = '';
   renderSettingsView();
   renderUploadView();
 });
@@ -1639,7 +1746,7 @@ window.__investmentLib = {
   replaceHoldings, getTrackedTickers,
   computePortfolioValue, computeAccountTotals, computeNetworth, buildNetworthSnapshot,
   aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary, buildHistoryTree, migrateSnapshots,
-  formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
+  formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON, exportBackupJSON, importBackupJSON,
   fmtCurrency, fmtPercent, fmtShares,
 };
 </script>

@@ -85,6 +85,7 @@ function runTests() {
     aggregateHoldingsByTicker, getBranchFromAccountKey, computeBranchSummary,
     buildHistoryTree, migrateSnapshots,
     formatAccountKey, isValidLast4, exportAccountsJSON, importAccountsJSON,
+    exportBackupJSON, importBackupJSON,
     fmtCurrency, fmtPercent, fmtShares,
     parseCSV,
   } = lib;
@@ -689,6 +690,102 @@ function runTests() {
     });
     test('returns em dash for null', () => {
       assertEqual(fmtShares(null), '—');
+    });
+  });
+
+  // ══ §exportBackupJSON ════════════════════════════════════════════════════
+  suite('exportBackupJSON', () => {
+    test('given full state, serializes accounts, holdings, currentPrices, and networthSnapshots to minified JSON', () => {
+      const input = {
+        accounts: [{ id: 'a1', name: 'Vanguard', last4: '1234', inputCsvFormat: ['ticker', 'shares'] }],
+        holdings: [{ id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: 'Vanguard ETF', shares: 100, costBasis: 21500 }],
+        currentPrices: { fetchedAt: '2026-05-21', prices: { VTI: 285.5 } },
+        networthSnapshots: [{ id: 's1', date: '2026-05-21', accounts: { 'Vanguard *1234': { value: 28550, costBasis: 21500 } }, totalValue: 28550, totalCostBasis: 21500 }],
+      };
+      const json = exportBackupJSON(input);
+      assert(!json.includes('\n'), 'output should be minified');
+      const parsed = JSON.parse(json);
+      assertEqual(parsed.accounts.length, 1);
+      assertEqual(parsed.holdings.length, 1);
+      assertEqual(parsed.currentPrices.prices.VTI, 285.5);
+      assertEqual(parsed.networthSnapshots.length, 1);
+    });
+
+    test('given empty or missing fields, defaults to empty arrays and null currentPrices', () => {
+      const parsed = JSON.parse(exportBackupJSON({}));
+      assertEqual(parsed, { accounts: [], holdings: [], currentPrices: null, networthSnapshots: [] });
+    });
+  });
+
+  // ══ §importBackupJSON ════════════════════════════════════════════════════
+  suite('importBackupJSON', () => {
+    const validBackup = {
+      accounts: [{ id: 'a1', name: 'Vanguard', last4: '1234', inputCsvFormat: ['ticker', 'shares'] }],
+      holdings: [{ id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', securityName: 'Vanguard ETF', shares: 100, costBasis: 21500 }],
+      currentPrices: { fetchedAt: '2026-05-21', prices: { VTI: 285.5 } },
+      networthSnapshots: [{ id: 's1', date: '2026-05-21', accounts: { 'Vanguard *1234': { value: 28550, costBasis: 21500 } }, totalValue: 28550, totalCostBasis: 21500 }],
+    };
+
+    test('given valid backup JSON, returns ok=true and all four collections', () => {
+      const res = importBackupJSON(JSON.stringify(validBackup));
+      assertEqual(res.ok, true);
+      assertEqual(res.data.accounts.length, 1);
+      assertEqual(res.data.holdings[0].ticker, 'VTI');
+      assertEqual(res.data.currentPrices.prices.VTI, 285.5);
+      assertEqual(res.data.networthSnapshots[0].totalValue, 28550);
+    });
+
+    test('given currentPrices as null, returns ok=true with currentPrices=null', () => {
+      const res = importBackupJSON(JSON.stringify({ ...validBackup, currentPrices: null }));
+      assertEqual(res.ok, true);
+      assertEqual(res.data.currentPrices, null);
+    });
+
+    test('given invalid JSON string, returns ok=false with error', () => {
+      const res = importBackupJSON('{bad json');
+      assertEqual(res.ok, false);
+      assert(res.error.toLowerCase().includes('invalid json'), 'mentions invalid JSON');
+    });
+
+    test('given a JSON array instead of an object, returns ok=false', () => {
+      const res = importBackupJSON('[]');
+      assertEqual(res.ok, false);
+    });
+
+    test('given account with invalid last4, returns ok=false', () => {
+      const bad = { ...validBackup, accounts: [{ id: 'a1', name: 'Vanguard', last4: '12', inputCsvFormat: ['ticker', 'shares'] }] };
+      const res = importBackupJSON(JSON.stringify(bad));
+      assertEqual(res.ok, false);
+      assert(res.error.toLowerCase().includes('last4'), 'error mentions last4');
+    });
+
+    test('given holding with missing ticker or non-positive shares, returns ok=false', () => {
+      const badTicker = { ...validBackup, holdings: [{ id: 'h1', accountKey: 'Vanguard *1234', ticker: '', shares: 10, costBasis: 100 }] };
+      assertEqual(importBackupJSON(JSON.stringify(badTicker)).ok, false);
+
+      const badShares = { ...validBackup, holdings: [{ id: 'h1', accountKey: 'Vanguard *1234', ticker: 'VTI', shares: 0, costBasis: 100 }] };
+      assertEqual(importBackupJSON(JSON.stringify(badShares)).ok, false);
+    });
+
+    test('given currentPrices with non-positive price, returns ok=false', () => {
+      const badPrices = { ...validBackup, currentPrices: { fetchedAt: '2026-05-21', prices: { VTI: -10 } } };
+      const res = importBackupJSON(JSON.stringify(badPrices));
+      assertEqual(res.ok, false);
+    });
+
+    test('given snapshot with missing date or non-numeric totalValue, returns ok=false', () => {
+      const badSnap = { ...validBackup, networthSnapshots: [{ id: 's1', date: '', accounts: {}, totalValue: 100, totalCostBasis: 80 }] };
+      assertEqual(importBackupJSON(JSON.stringify(badSnap)).ok, false);
+    });
+
+    test('given legacy snapshot with numeric account values, migrates account entries to { value, costBasis: 0 }', () => {
+      const legacy = {
+        ...validBackup,
+        networthSnapshots: [{ id: 's1', date: '2026-01-01', accounts: { 'Vanguard *1234': 15000 }, totalValue: 15000, totalCostBasis: 0 }],
+      };
+      const res = importBackupJSON(JSON.stringify(legacy));
+      assertEqual(res.ok, true);
+      assertEqual(res.data.networthSnapshots[0].accounts['Vanguard *1234'], { value: 15000, costBasis: 0 });
     });
   });
 
