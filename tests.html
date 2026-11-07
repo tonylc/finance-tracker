@@ -83,10 +83,11 @@ function runTests() {
   }
   const {
     parseCSV, formatAccountKey, validateImport, buildHeaderMap,
-    parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange,
+    parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount,
     aggregateByCategory, totalSpend, cycleCategoryByKey, nextAccountFilter,
     validateExport, toCSV, mergeCategorizedSession, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
     exportAccountsJSON, importAccountsJSON, isValidLast4, ALL_SUBS, VALID_CATS,
+    normalizePayee, applyPayeeRules, discoverPayeeCandidates, mergePayeeRules, exportPayeeRulesJSON, importPayeeRulesJSON,
   } = lib;
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1090,6 +1091,133 @@ function runTests() {
     test('returns the session accountKey on success', () => {
       const r = mergeCategorizedSession(existing, categorized);
       assertEqual(r.accountKey, 'Chase *1234');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // §2.3 Categorize · §2.5 Settings — Payee Auto-Categorize Rules
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── normalizePayee ────────────────────────────────────────────────────────
+  suite('normalizePayee', () => {
+    test('strips common payment processor prefixes and uppercases', () => {
+      assertEqual(normalizePayee('SQ *BOBA SHOP SAN CARLOS'), 'BOBA SHOP SAN CARLOS');
+      assertEqual(normalizePayee('TST* CAFE LUNA - DOWNTOWN'), 'CAFE LUNA');
+      assertEqual(normalizePayee('DD *TACO SPOT'), 'TACO SPOT');
+    });
+
+    test('strips trailing store numbers, location suffixes, and LLC', () => {
+      assertEqual(normalizePayee('COFFEE HOUSE #04919'), 'COFFEE HOUSE');
+      assertEqual(normalizePayee('BURGER JOINT STORE 1234'), 'BURGER JOINT');
+      assertEqual(normalizePayee('SQ *BONJOUR BAKEHOUSE LLC'), 'BONJOUR BAKEHOUSE');
+    });
+  });
+
+  // ── applyPayeeRules ───────────────────────────────────────────────────────
+  suite('applyPayeeRules', () => {
+    const rules = {
+      'Coffee / Bakery': ['COFFEE HOUSE', 'STARBUCKS'],
+      'Restaurants': ['BURGER JOINT'],
+    };
+
+    test('assigns category when uncategorized description matches regex case-insensitively', () => {
+      const txs = [
+        { id: '1', description: 'SQ *Starbucks Store 123', category: '', amount: -5 },
+        { id: '2', description: 'BURGER JOINT #44', category: '', amount: -15 },
+      ];
+      const result = applyPayeeRules(txs, rules);
+      assertEqual(result[0].category, 'Coffee / Bakery');
+      assertEqual(result[1].category, 'Restaurants');
+    });
+
+    test('does not overwrite already-categorized transactions', () => {
+      const txs = [
+        { id: '1', description: 'STARBUCKS 123', category: 'Gifts', amount: -25 },
+      ];
+      const result = applyPayeeRules(txs, rules);
+      assertEqual(result[0].category, 'Gifts');
+    });
+
+    test('leaves unmatched transactions uncategorized and does not mutate input', () => {
+      const txs = [{ id: '1', description: 'UNKNOWN SHOP', category: '', amount: -10 }];
+      const result = applyPayeeRules(txs, rules);
+      assertEqual(result[0].category, '');
+      assert(result !== txs, 'returns new array');
+    });
+  });
+
+  // ── discoverPayeeCandidates ───────────────────────────────────────────────
+  suite('discoverPayeeCandidates', () => {
+    test('returns single-category payees with >= minCount payments sorted by category and pattern', () => {
+      const txs = [
+        ...Array.from({ length: 6 }, (_, i) => ({ description: `SQ *MORNING BREW #${i}`, category: 'Coffee / Bakery' })),
+        ...Array.from({ length: 7 }, (_, i) => ({ description: `TST* TACO PLACE - ${i}`, category: 'Restaurants' })),
+        ...Array.from({ length: 4 }, () => ({ description: 'FOUR COUNT SHOP', category: 'Groceries' })),
+      ];
+      const candidates = discoverPayeeCandidates(txs, {});
+      assertEqual(candidates.length, 2);
+      assertEqual(candidates[0], { pattern: 'MORNING BREW', category: 'Coffee / Bakery', count: 6 });
+      assertEqual(candidates[1], { pattern: 'TACO PLACE', category: 'Restaurants', count: 7 });
+    });
+
+    test('never includes payees that appear across multiple categories (e.g. Venmo/PayPal)', () => {
+      const txs = [
+        ...Array.from({ length: 5 }, () => ({ description: 'VENMO PAYMENT', category: 'Restaurants' })),
+        ...Array.from({ length: 3 }, () => ({ description: 'VENMO PAYMENT', category: 'Bills' })),
+      ];
+      const candidates = discoverPayeeCandidates(txs, {});
+      assertEqual(candidates.length, 0);
+    });
+
+    test('excludes candidates already covered by existingRules', () => {
+      const txs = Array.from({ length: 6 }, () => ({ description: 'MORNING BREW', category: 'Coffee / Bakery' }));
+      const candidates = discoverPayeeCandidates(txs, { 'Coffee / Bakery': ['MORNING BREW'] });
+      assertEqual(candidates.length, 0);
+    });
+  });
+
+  // ── mergePayeeRules ───────────────────────────────────────────────────────
+  suite('mergePayeeRules', () => {
+    test('merges new rules, deduplicates, and sorts categories and patterns alphabetically', () => {
+      const existing = { 'Restaurants': ['ZETA GRILL', 'ALPHA CAFE'] };
+      const additions = [
+        { pattern: 'BETA DINER', category: 'Restaurants' },
+        { pattern: 'ALPHA CAFE', category: 'Restaurants' },
+        { pattern: 'BEAN SHOP', category: 'Coffee / Bakery' },
+      ];
+      const merged = mergePayeeRules(existing, additions);
+      assertEqual(Object.keys(merged), ['Coffee / Bakery', 'Restaurants']);
+      assertEqual(merged['Coffee / Bakery'], ['BEAN SHOP']);
+      assertEqual(merged['Restaurants'], ['ALPHA CAFE', 'BETA DINER', 'ZETA GRILL']);
+    });
+  });
+
+  // ── exportPayeeRulesJSON ──────────────────────────────────────────────────
+  suite('exportPayeeRulesJSON', () => {
+    test('exports alphabetically sorted categories and patterns as minified JSON', () => {
+      const rules = { 'Restaurants': ['ZETA', 'ALPHA'], 'Coffee / Bakery': ['BOBA'] };
+      const json = exportPayeeRulesJSON(rules);
+      assert(!json.includes('\n'), 'minified JSON has no newlines');
+      const parsed = JSON.parse(json);
+      assertEqual(Object.keys(parsed), ['Coffee / Bakery', 'Restaurants']);
+      assertEqual(parsed['Restaurants'], ['ALPHA', 'ZETA']);
+    });
+  });
+
+  // ── importPayeeRulesJSON ──────────────────────────────────────────────────
+  suite('importPayeeRulesJSON', () => {
+    test('validates and sorts valid payee rules JSON', () => {
+      const raw = JSON.stringify({ 'Restaurants': ['ZETA', 'ALPHA'] });
+      const res = importPayeeRulesJSON(raw);
+      assertEqual(res.ok, true);
+      assertEqual(res.rules['Restaurants'], ['ALPHA', 'ZETA']);
+    });
+
+    test('rejects unknown categories, non-object JSON, or invalid regex patterns', () => {
+      assertEqual(importPayeeRulesJSON('not json').ok, false);
+      assertEqual(importPayeeRulesJSON('[]').ok, false);
+      assertEqual(importPayeeRulesJSON(JSON.stringify({ 'InvalidCat': ['FOO'] })).ok, false);
+      assertEqual(importPayeeRulesJSON(JSON.stringify({ 'Restaurants': ['[unclosed'] })).ok, false);
     });
   });
 

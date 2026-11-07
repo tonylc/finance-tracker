@@ -337,3 +337,20 @@ test.describe('Merge to Account', () => {
     expect(csv).toContain('Groceries');
   });
 });
+
+test.describe('Auto-Categorize by Payee Rules', () => {
+  test('pre-populates category for uncategorized rows matching configured payee regex rules', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await page.evaluate(() => {
+      const cfg = JSON.parse(localStorage.getItem('financeTrackerConfig') || '{}');
+      cfg.payeeRules = { 'Coffee / Bakery': ['MORNING BREW'], 'Restaurants': ['TACO SPOT'] };
+      localStorage.setItem('financeTrackerConfig', JSON.stringify(cfg));
+    });
+    await page.reload();
+    await catImport(page, '2026-01-11,UNKNOWN MERCHANT,,-12.00\n2026-01-10,SQ *MORNING BREW #12,,-6.50');
+
+    await expect(page.locator('#cat-tbody tr[data-idx="0"] select')).toHaveValue('');
+    await expect(page.locator('#cat-tbody tr[data-idx="1"] select')).toHaveValue('Coffee / Bakery');
+  });
+});

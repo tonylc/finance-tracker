@@ -245,3 +245,54 @@ test.describe('Account Type', () => {
     await expect(page.locator('#settings-tbody')).toContainText('Credit Card');
   });
 });
+
+test.describe('Payee Auto-Categorize Rules', () => {
+  test('imports, displays alphabetically by category, exports minified JSON, and discovers verified candidates', async ({ page }) => {
+    await page.goto('index.html');
+    await page.click('[data-view="settings"]');
+
+    const rulesJson = JSON.stringify({
+      'Restaurants': ['ZETA GRILL', 'ALPHA DINER'],
+      'Coffee / Bakery': ['MORNING BREW'],
+    });
+    await page.fill('#payee-import-field', rulesJson);
+    await page.click('#payee-import-btn');
+
+    await expect(page.locator('#payee-rules-list')).toContainText('Coffee / Bakery');
+    await expect(page.locator('#payee-rules-list')).toContainText('ALPHA DINER');
+
+    await page.click('#payee-export-btn');
+    const exported = await page.inputValue('#payee-export-field');
+    expect(exported).not.toContain('\n');
+    expect(JSON.parse(exported)['Restaurants']).toEqual(['ALPHA DINER', 'ZETA GRILL']);
+
+    // Seed loaded transactions with a 6-count single-category payee and a multi-category payee (VENMO)
+    await page.evaluate(() => {
+      const txs = [
+        ...Array.from({ length: 6 }, (_, i) => ({
+          id: `t${i}`, accountKey: 'Chase *1234', date: '2026-01-10',
+          description: `TST* TACO PLACE - ${i}`, amount: -12, category: 'Restaurants', fix: false,
+        })),
+        ...Array.from({ length: 5 }, (_, i) => ({
+          id: `v1_${i}`, accountKey: 'Chase *1234', date: '2026-01-11',
+          description: 'VENMO PAYMENT', amount: -20, category: 'Restaurants', fix: false,
+        })),
+        ...Array.from({ length: 3 }, (_, i) => ({
+          id: `v2_${i}`, accountKey: 'Chase *1234', date: '2026-01-12',
+          description: 'VENMO PAYMENT', amount: -30, category: 'Bills', fix: false,
+        })),
+      ];
+      localStorage.setItem('financeTrackerTx', JSON.stringify(txs));
+    });
+    await page.reload();
+    await page.click('[data-view="settings"]');
+
+    await page.click('#payee-discover-btn');
+    await expect(page.locator('#payee-candidates-tbody tr')).toHaveCount(1);
+    await expect(page.locator('#payee-candidates-tbody .payee-candidate-pattern')).toHaveValue('TACO PLACE');
+
+    // User verifies and clicks Add Selected Rules
+    await page.click('#payee-add-selected-btn');
+    await expect(page.locator('#payee-rules-list')).toContainText('TACO PLACE');
+  });
+});

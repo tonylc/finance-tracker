@@ -233,9 +233,11 @@ On success, `handleCatMerge()` assigns `result.transactions` to `state.transacti
 
 Merging also surfaces the exportable CSV of the merged rows: `handleCatMerge()` writes `toCSV(sortByDateAsc(state.catSession))` into `#export-output` and shows `#cat-export-card` before clearing the session, so the CSV (and its **Copy** button) remains available after the merge. `#cat-export-card` is a sibling of `#cat-review` (not a child), so it stays visible once the review panel is hidden; a subsequent import hides it again via `handleCatImport()`.
 
----
+#### Auto-Categorize by Payee Rules
 
-### 2.4 Responsive Design
+When transactions are loaded into the Categorize view (`handleCatImport`), any row with a blank category whose description matches a regex in `state.userConfig.payeeRules` (case-insensitive) is automatically pre-populated with that category via `applyPayeeRules()`. Transactions that already have a category assigned are not overwritten.
+
+---
 
 All views are mobile-friendly via a `@media (max-width: 600px)` block. Key adaptations:
 - Reduced card, main, and header padding.
@@ -301,9 +303,15 @@ When an account's `inputCsvFormat` contains `"-amount"`, every amount is negated
 
 The **Load view** consumes the app's canonical, already-normalized format — the Categorize export, in fixed `Date,Description,Amount,Category,Fix` order — and does **not** re-apply `-amount`. Re-inverting there would double-flip the sign of data that has already been normalized (e.g. a Categorize-normalized `−50` would wrongly become `+50` on re-import).
 
----
+#### Payee Auto-Categorize Rules
 
-## 3. Data Model
+Payee rules are configured in the Settings view to automatically assign categories to recurring payees during Categorize import. Rules are stored in `state.userConfig.payeeRules` as `{ [category: string]: string[] }` (alphabetically sorted category names and pattern lists) and persisted to `localStorage` under `'financeTrackerConfig'`.
+
+- **Rule Display:** Shows configured rules grouped by category with pattern badges and a delete button (`×`) per pattern.
+- **Candidate Discovery (`#payee-discover-btn`):** Scans loaded transactions via `discoverPayeeCandidates()`, finding payees with $\ge 5$ payments that map 100% consistently to a single category (excluding multi-category merchants like Venmo or PayPal, and skipping patterns already covered). Candidates are rendered in a verification table with checkboxes and editable regex pattern inputs before clicking **Add Selected Rules** (`#payee-add-selected-btn`).
+- **Export / Import Payee Rules:** `#payee-export-btn` generates minified JSON in `#payee-export-field`. `#payee-import-btn` parses and validates JSON from `#payee-import-field` via `importPayeeRulesJSON()` and updates `state.userConfig.payeeRules`.
+
+---
 
 ### Transaction
 
@@ -403,6 +411,17 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | `isValidLast4` | `(val: unknown) → boolean` | Returns `true` iff `val` is a string matching `/^\d{4}$/` (exactly 4 ASCII digits). Used by both `importAccountsJSON` and the settings form (`saveAccountConfig`) as the single source of truth for last4 validation. |
 | `exportAccountsJSON` | `(accounts: AccountProfile[]) → string` | Returns a minified (no newlines) JSON string of the accounts array. |
 | `importAccountsJSON` | `(jsonString: string) → { ok: true, accounts: AccountProfile[] } \| { ok: false, error: string }` | Parses and validates a JSON blob. Requires top-level array; each element must have `name` (string), `last4` (passes `isValidLast4`), and `inputCsvFormat` (array). Returns `{ ok: false, error }` on malformed JSON, non-array input, or any account failing validation. Missing `id` values are assigned by the UI caller. |
+
+### Payee Auto-Categorization
+
+| Function | Signature | Description |
+|---|---|---|
+| `normalizePayee` | `(description: string) → string` | Uppercases and strips common payment processor prefixes, hyphenated branch suffixes, store numbers, and LLC. |
+| `applyPayeeRules` | `(transactions: Transaction[], rules: Record<string, string[]>) → Transaction[]` | Auto-assigns category to uncategorized transactions matching regex rules case-insensitively. |
+| `discoverPayeeCandidates` | `(transactions: Transaction[], existingRules?: Record<string, string[]>, minCount?: number) → Candidate[]` | Finds single-category payees with $\ge \text{minCount}$ payments not already in `existingRules`. |
+| `mergePayeeRules` | `(existingRules: Record<string, string[]>, additions: Candidate[]) → Record<string, string[]>` | Merges new rules, deduplicates, and sorts categories and patterns alphabetically. |
+| `exportPayeeRulesJSON` | `(rules: Record<string, string[]>) → string` | Serializes sorted payee regex rules to minified JSON. |
+| `importPayeeRulesJSON` | `(jsonString: string) → { ok: true, rules } \| { ok: false, error: string }` | Validates and parses payee regex rules JSON. |
 
 ### Formatting
 

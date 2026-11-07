@@ -665,6 +665,61 @@
       </div>
     </div>
 
+    <!-- Payee Auto-Categorize Rules -->
+    <div class="card" id="payee-rules-card">
+      <div class="flex-between" style="margin-bottom:10px;">
+        <h3 style="margin:0;">Payee Auto-Categorize Rules</h3>
+        <button class="btn btn-primary btn-sm" id="payee-discover-btn">Discover Frequent Payees</button>
+      </div>
+      <p style="font-size:12px;color:#777;margin-bottom:12px;">Unassigned transactions in Categorize whose description matches any regex pattern below (case-insensitive) will automatically receive that category.</p>
+
+      <div id="payee-rules-empty" class="empty-state" style="padding:16px 0;">No payee rules configured yet. Import rules below or click &ldquo;Discover Frequent Payees&rdquo;.</div>
+      <div id="payee-rules-list" style="display:none;margin-bottom:16px;"></div>
+
+      <div id="payee-candidates-section" style="display:none;margin-top:14px;border-top:1px solid #eee;padding-top:12px;">
+        <h4 style="margin:0 0 6px;font-size:13px;">Candidate Frequent Payees (&ge; 5 payments, single category only)</h4>
+        <p style="font-size:12px;color:#777;margin-bottom:8px;">Verify or edit the regex pattern before adding to your master list. Multi-category payees (e.g. Venmo, PayPal) are automatically excluded.</p>
+        <div id="payee-candidates-empty" style="display:none;font-size:12px;color:#777;padding:8px 0;">No new single-category frequent payees found in loaded transactions.</div>
+        <div id="payee-candidates-table-wrap" style="display:none;">
+          <table id="payee-candidates-table" style="margin-bottom:10px;">
+            <thead>
+              <tr>
+                <th style="width:36px;">Add</th>
+                <th>Regex Pattern</th>
+                <th>Category</th>
+                <th style="text-align:right;">Payments</th>
+              </tr>
+            </thead>
+            <tbody id="payee-candidates-tbody"></tbody>
+          </table>
+          <button class="btn btn-success btn-sm" id="payee-add-selected-btn">Add Selected Rules</button>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;border-top:1px solid #eee;padding-top:12px;">
+        <h4 style="margin:0 0 8px;font-size:13px;">Export Payee Rules</h4>
+        <button class="btn btn-primary btn-sm" id="payee-export-btn">Export Payee Rules</button>
+        <div id="payee-export-section" style="display:none;margin-top:10px;">
+          <label for="payee-export-field" style="font-size:12px;color:#555;">Minified JSON (copy this)</label>
+          <textarea id="payee-export-field" readonly rows="3" style="font-family:monospace;font-size:11px;margin-top:4px;resize:vertical;"></textarea>
+          <label style="font-size:12px;color:#555;margin-top:10px;display:block;">Pretty-printed preview</label>
+          <pre id="payee-export-pretty" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;overflow:auto;margin-top:4px;white-space:pre-wrap;word-break:break-all;"></pre>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;border-top:1px solid #eee;padding-top:12px;">
+        <h4 style="margin:0 0 8px;font-size:13px;">Import Payee Rules</h4>
+        <label for="payee-import-field" style="font-size:12px;color:#555;">Paste Payee Rules JSON here</label>
+        <textarea id="payee-import-field" rows="3" placeholder='{"Coffee / Bakery":["STARBUCKS"],"Restaurants":["CHIPOTLE"]}' style="font-family:monospace;font-size:11px;margin-top:4px;resize:vertical;"></textarea>
+        <div id="payee-import-error" class="alert alert-error" style="display:none;margin-top:8px;"></div>
+        <button class="btn btn-primary btn-sm" id="payee-import-btn" style="margin-top:8px;">Import Payee Rules</button>
+        <div id="payee-import-section" style="display:none;margin-top:10px;">
+          <label style="font-size:12px;color:#555;">Imported payee rules (pretty-printed)</label>
+          <pre id="payee-import-pretty" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;overflow:auto;margin-top:4px;white-space:pre-wrap;word-break:break-all;"></pre>
+        </div>
+      </div>
+    </div>
+
     <div class="card" id="settings-form-card" style="display:none;">
       <h3 id="settings-form-title">Add Account</h3>
       <div class="form-row">
@@ -731,13 +786,19 @@ const state = {
   transactions: [],  // all loaded transactions
   accounts: [],      // { key, name, last4 }
   catSession: [],    // rows being reviewed in categorize view
-  userConfig: { accounts: [] }, // persisted account profiles
+  userConfig: { accounts: [], payeeRules: {} }, // persisted account profiles & payee auto-categorize rules
 };
 
 function loadConfig() {
   try {
     const raw = localStorage.getItem('financeTrackerConfig');
-    if (raw) state.userConfig = JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state.userConfig = {
+        accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
+        payeeRules: (parsed.payeeRules && typeof parsed.payeeRules === 'object' && !Array.isArray(parsed.payeeRules)) ? parsed.payeeRules : {},
+      };
+    }
   } catch (e) { /* ignore corrupt data */ }
 }
 
@@ -1116,7 +1177,10 @@ function switchView(view) {
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
   if (view === 'budget') renderBudget();
-  if (view === 'settings') renderSettingsTable();
+  if (view === 'settings') {
+    renderSettingsTable();
+    renderPayeeRules();
+  }
 }
 
 const LOAD_HEADER_MAP = { date: 0, description: 1, amount: 2, category: 3, fix: 4 };
@@ -1680,7 +1744,8 @@ function handleCatImport() {
   }
 
   const accountKey = formatAccountKey(account.name, account.last4);
-  state.catSession = sortByDateDesc(dataRows.map(fields => parseTransaction(fields, headerMap, accountKey)));
+  const parsedTxs = sortByDateDesc(dataRows.map(fields => parseTransaction(fields, headerMap, accountKey)));
+  state.catSession = applyPayeeRules(parsedTxs, state.userConfig.payeeRules || {});
   catAccountType = account.type || 'credit';
   selectedIdxs.clear();
   toggleMultiSelect(false);
@@ -2243,11 +2308,159 @@ function populateAccountDropdowns() {
 }
 
 // ══════════════════════════════════════════════════
+//  PAYEE AUTO-CATEGORIZE RULES (SETTINGS)
+// ══════════════════════════════════════════════════
+document.getElementById('payee-discover-btn').addEventListener('click', doDiscoverPayeeCandidates);
+document.getElementById('payee-add-selected-btn').addEventListener('click', doAddSelectedPayeeRules);
+document.getElementById('payee-export-btn').addEventListener('click', doExportPayeeRules);
+document.getElementById('payee-import-btn').addEventListener('click', doImportPayeeRules);
+
+function renderPayeeRules() {
+  const rules = mergePayeeRules(state.userConfig.payeeRules || {}, []);
+  state.userConfig.payeeRules = rules;
+  const cats = Object.keys(rules);
+  const emptyEl = document.getElementById('payee-rules-empty');
+  const listEl = document.getElementById('payee-rules-list');
+
+  if (cats.length === 0) {
+    emptyEl.style.display = 'block';
+    listEl.style.display = 'none';
+    listEl.innerHTML = '';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  listEl.style.display = 'block';
+  listEl.innerHTML = '';
+
+  cats.forEach(cat => {
+    const groupDiv = document.createElement('div');
+    groupDiv.style.marginBottom = '10px';
+    const title = document.createElement('div');
+    title.style.fontWeight = '600';
+    title.style.fontSize = '12px';
+    title.style.marginBottom = '4px';
+    title.textContent = cat;
+    groupDiv.appendChild(title);
+
+    const chipsWrap = document.createElement('div');
+    chipsWrap.style.display = 'flex';
+    chipsWrap.style.flexWrap = 'wrap';
+    chipsWrap.style.gap = '6px';
+
+    rules[cat].forEach(pat => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:14px;padding:2px 10px;font-size:11px;font-family:monospace;';
+      const text = document.createElement('span');
+      text.textContent = pat;
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.textContent = '×';
+      delBtn.title = 'Remove pattern';
+      delBtn.style.cssText = 'border:none;background:transparent;color:#666;cursor:pointer;font-size:13px;padding:0;line-height:1;';
+      delBtn.addEventListener('click', () => deletePayeeRule(cat, pat));
+      chip.appendChild(text);
+      chip.appendChild(delBtn);
+      chipsWrap.appendChild(chip);
+    });
+
+    groupDiv.appendChild(chipsWrap);
+    listEl.appendChild(groupDiv);
+  });
+}
+
+function deletePayeeRule(category, pattern) {
+  const current = state.userConfig.payeeRules || {};
+  if (!Array.isArray(current[category])) return;
+  current[category] = current[category].filter(p => p !== pattern);
+  if (current[category].length === 0) delete current[category];
+  state.userConfig.payeeRules = mergePayeeRules(current, []);
+  saveConfig();
+  renderPayeeRules();
+}
+
+function doDiscoverPayeeCandidates() {
+  const candidates = discoverPayeeCandidates(state.transactions, state.userConfig.payeeRules || {}, 5);
+  const sec = document.getElementById('payee-candidates-section');
+  const emptyEl = document.getElementById('payee-candidates-empty');
+  const wrapEl = document.getElementById('payee-candidates-table-wrap');
+  const tbody = document.getElementById('payee-candidates-tbody');
+
+  sec.style.display = 'block';
+  tbody.innerHTML = '';
+
+  if (candidates.length === 0) {
+    emptyEl.style.display = 'block';
+    wrapEl.style.display = 'none';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  wrapEl.style.display = 'block';
+
+  candidates.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" class="payee-candidate-check" checked></td>
+      <td><input type="text" class="payee-candidate-pattern" value="${c.pattern.replace(/"/g, '&quot;')}" style="font-family:monospace;font-size:12px;width:100%;"></td>
+      <td class="payee-candidate-category">${c.category}</td>
+      <td style="text-align:right;">${c.count}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function doAddSelectedPayeeRules() {
+  const rows = document.querySelectorAll('#payee-candidates-tbody tr');
+  const additions = [];
+  rows.forEach(tr => {
+    const cb = tr.querySelector('.payee-candidate-check');
+    const patInput = tr.querySelector('.payee-candidate-pattern');
+    const catCell = tr.querySelector('.payee-candidate-category');
+    if (cb && cb.checked && patInput && catCell) {
+      const pattern = patInput.value.trim();
+      const category = catCell.textContent.trim();
+      if (pattern && category) additions.push({ pattern, category });
+    }
+  });
+  state.userConfig.payeeRules = mergePayeeRules(state.userConfig.payeeRules || {}, additions);
+  saveConfig();
+  renderPayeeRules();
+  doDiscoverPayeeCandidates();
+}
+
+function doExportPayeeRules() {
+  const json = exportPayeeRulesJSON(state.userConfig.payeeRules || {});
+  document.getElementById('payee-export-field').value = json;
+  document.getElementById('payee-export-pretty').textContent = JSON.stringify(JSON.parse(json), null, 2);
+  document.getElementById('payee-export-section').style.display = 'block';
+}
+
+function doImportPayeeRules() {
+  const raw = document.getElementById('payee-import-field').value.trim();
+  const errEl = document.getElementById('payee-import-error');
+  const result = importPayeeRulesJSON(raw);
+  if (!result.ok) {
+    errEl.textContent = result.error;
+    errEl.style.display = 'block';
+    document.getElementById('payee-import-section').style.display = 'none';
+    return;
+  }
+  state.userConfig.payeeRules = result.rules;
+  saveConfig();
+  renderPayeeRules();
+  errEl.style.display = 'none';
+  document.getElementById('payee-import-pretty').textContent = JSON.stringify(result.rules, null, 2);
+  document.getElementById('payee-import-section').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════
 loadConfig();
 loadPersistedTransactions();
 populateAccountDropdowns();
+renderPayeeRules();
 
 // ══════════════════════════════════════════════════
 //  EXPOSE PURE FUNCTIONS FOR TESTS
@@ -2285,11 +2498,152 @@ function importAccountsJSON(jsonString) {
   return { ok: true, accounts: parsed };
 }
 
+function normalizePayee(description) {
+  if (typeof description !== 'string') return '';
+  let s = description.toUpperCase().trim();
+  s = s.replace(/^(?:SQ \*|TST\*\s*|SNACK\*\s*|DD \*|PY \*|PAR\*|SPO\*|UEP\*|CKE\*|FSP\*|BM \*|FP\*|SP |MEN\d+\s+)/, '');
+  s = s.replace(/ - .*$/, '');
+  s = s.replace(/\s+#\d+.*$/, '');
+  s = s.replace(/\s+STORE\s+\d+.*$/, '');
+  s = s.replace(/\s+\d{4,}.*$/, '');
+  s = s.replace(/\s+LLC$/, '');
+  return s.trim();
+}
+
+function applyPayeeRules(transactions, rules) {
+  if (!Array.isArray(transactions)) return [];
+  if (!rules || typeof rules !== 'object') return transactions.map(t => ({ ...t }));
+  const compiled = [];
+  for (const [cat, patterns] of Object.entries(rules)) {
+    if (!Array.isArray(patterns)) continue;
+    for (const pat of patterns) {
+      if (typeof pat !== 'string' || !pat.trim()) continue;
+      try {
+        compiled.push({ re: new RegExp(pat, 'i'), category: cat });
+      } catch (_) {}
+    }
+  }
+  return transactions.map(tx => {
+    if (tx.category && tx.category.trim()) return { ...tx };
+    const desc = tx.description || '';
+    const match = compiled.find(r => r.re.test(desc));
+    return match ? { ...tx, category: match.category } : { ...tx };
+  });
+}
+
+function discoverPayeeCandidates(transactions, existingRules = {}, minCount = 5) {
+  if (!Array.isArray(transactions)) return [];
+  const groups = new Map();
+  for (const tx of transactions) {
+    if (!tx || !tx.category || !tx.category.trim() || !tx.description) continue;
+    const norm = normalizePayee(tx.description);
+    if (!norm) continue;
+    if (!groups.has(norm)) {
+      groups.set(norm, { count: 0, categories: new Set() });
+    }
+    const entry = groups.get(norm);
+    entry.count++;
+    entry.categories.add(tx.category.trim());
+  }
+
+  const compiledExisting = [];
+  if (existingRules && typeof existingRules === 'object') {
+    for (const patterns of Object.values(existingRules)) {
+      if (!Array.isArray(patterns)) continue;
+      for (const pat of patterns) {
+        if (typeof pat !== 'string' || !pat.trim()) continue;
+        try {
+          compiledExisting.push(new RegExp(pat, 'i'));
+        } catch (_) {}
+      }
+    }
+  }
+
+  const candidates = [];
+  for (const [pattern, info] of groups.entries()) {
+    if (info.count < minCount) continue;
+    if (info.categories.size !== 1) continue;
+    if (compiledExisting.some(re => re.test(pattern))) continue;
+    const [category] = info.categories;
+    candidates.push({ pattern, category, count: info.count });
+  }
+
+  return candidates.sort((a, b) =>
+    a.category.localeCompare(b.category) || a.pattern.localeCompare(b.pattern)
+  );
+}
+
+function mergePayeeRules(existingRules = {}, additions = []) {
+  const map = new Map();
+  if (existingRules && typeof existingRules === 'object') {
+    for (const [cat, patterns] of Object.entries(existingRules)) {
+      if (!Array.isArray(patterns)) continue;
+      if (!map.has(cat)) map.set(cat, new Set());
+      const set = map.get(cat);
+      patterns.forEach(p => { if (typeof p === 'string' && p.trim()) set.add(p.trim()); });
+    }
+  }
+  if (Array.isArray(additions)) {
+    for (const item of additions) {
+      if (!item || typeof item.category !== 'string' || typeof item.pattern !== 'string') continue;
+      const cat = item.category.trim();
+      const pat = item.pattern.trim();
+      if (!cat || !pat) continue;
+      if (!map.has(cat)) map.set(cat, new Set());
+      map.get(cat).add(pat);
+    }
+  }
+  const sorted = {};
+  for (const cat of [...map.keys()].sort((a, b) => a.localeCompare(b))) {
+    const arr = [...map.get(cat)].sort((a, b) => a.localeCompare(b));
+    if (arr.length > 0) sorted[cat] = arr;
+  }
+  return sorted;
+}
+
+function exportPayeeRulesJSON(rules = {}) {
+  const normalized = mergePayeeRules(rules, []);
+  return JSON.stringify(normalized);
+}
+
+function importPayeeRulesJSON(jsonString) {
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonString);
+  } catch (e) {
+    return { ok: false, error: 'Invalid JSON: ' + e.message };
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, error: 'Expected a JSON object mapping categories to regex pattern arrays.' };
+  }
+  for (const [cat, patterns] of Object.entries(parsed)) {
+    if (!VALID_CATS.has(cat)) {
+      return { ok: false, error: `Unknown category "${cat}".` };
+    }
+    if (!Array.isArray(patterns)) {
+      return { ok: false, error: `Category "${cat}" must map to an array of regex strings.` };
+    }
+    for (let i = 0; i < patterns.length; i++) {
+      const p = patterns[i];
+      if (typeof p !== 'string' || !p.trim()) {
+        return { ok: false, error: `Category "${cat}" has an empty or non-string pattern at index ${i}.` };
+      }
+      try {
+        new RegExp(p, 'i');
+      } catch (err) {
+        return { ok: false, error: `Invalid regex "${p}" in category "${cat}": ${err.message}` };
+      }
+    }
+  }
+  return { ok: true, rules: mergePayeeRules(parsed, []) };
+}
+
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, nextAccountFilter, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, mergeCategorizedSession, getMonthList,
   exportAccountsJSON, importAccountsJSON, isValidLast4,
+  normalizePayee, applyPayeeRules, discoverPayeeCandidates, mergePayeeRules, exportPayeeRulesJSON, importPayeeRulesJSON,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
 </script>
