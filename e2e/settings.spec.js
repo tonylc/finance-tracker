@@ -149,28 +149,6 @@ test.describe('Export Settings', () => {
     expect(json).toContain('Chase');
     expect(json).toContain('1234');
   });
-
-  test('Export Settings omits transactions while Export Settings + Transactions includes them', async ({ page }) => {
-    await seedAccounts(page);
-    await page.goto('index.html');
-    await page.evaluate(() => {
-      localStorage.setItem('financeTrackerTx', JSON.stringify([
-        { id: 't1', accountKey: 'Chase *1234', date: '2026-01-10', description: 'COFFEE', amount: -5, category: 'Coffee / Bakery', fix: false },
-      ]));
-    });
-    await page.reload();
-    await page.click('[data-view="settings"]');
-
-    await page.click('#settings-export-btn');
-    const settingsOnly = JSON.parse(await page.locator('#settings-export-field').inputValue());
-    expect(settingsOnly.accounts).toHaveLength(1);
-    expect(settingsOnly.transactions).toBeUndefined();
-
-    await page.click('#settings-export-all-btn');
-    const fullExport = JSON.parse(await page.locator('#settings-export-field').inputValue());
-    expect(fullExport.accounts).toHaveLength(1);
-    expect(fullExport.transactions).toHaveLength(1);
-  });
 });
 
 test.describe('Import Settings', () => {

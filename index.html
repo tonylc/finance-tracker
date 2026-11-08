@@ -400,12 +400,27 @@
     </div>
 
     <div class="card" id="load-summary" style="display:none;">
-      <h3>Loaded Accounts</h3>
+      <div class="flex-between" style="margin-bottom:10px;">
+        <h3 style="margin:0;">Loaded Accounts</h3>
+        <button class="btn btn-sm btn-primary" id="load-export-all-btn">Export All CSV</button>
+      </div>
       <div class="accounts-list" id="accounts-list"></div>
       <div class="mt-16">
         <p style="font-size:12px;color:#555;">Total transactions loaded: <strong id="total-tx-count">0</strong></p>
         <p style="font-size:12px;color:#c62828;" id="uncategorized-notice" style="display:none;"></p>
       </div>
+    </div>
+
+    <div class="card" id="load-all-csv-card">
+      <h3>Import All Transactions from CSV File</h3>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">
+        Upload a 6-column CSV file (<strong>Account, Date, Description, Amount, Category, Fix</strong>) exported via &ldquo;Export All CSV&rdquo; to replace all loaded transactions across all accounts.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="file" id="load-all-file-input" accept=".csv,text/csv" style="font-size:12px;">
+        <button class="btn btn-primary btn-sm" id="load-all-import-btn">Import All CSV</button>
+      </div>
+      <div id="load-all-status" style="margin-top:10px;display:none;"></div>
     </div>
 
     <div class="card" id="load-export-card" style="display:none;">
@@ -641,11 +656,8 @@
     <!-- Export Settings -->
     <div class="card">
       <h3 style="margin:0 0 12px;">Export Settings</h3>
-      <p style="font-size:12px;color:#777;margin-bottom:10px;">Copy the minified JSON below and save it somewhere safe to restore your account configurations (or full backup including transactions) in another browser.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
-        <button class="btn btn-secondary btn-sm" id="settings-export-all-btn">Export Settings + Transactions</button>
-      </div>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Copy the minified JSON below and save it somewhere safe to restore your account configurations and payee rules in another browser.</p>
+      <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
       <div id="settings-export-section" style="display:none;margin-top:12px;">
         <label for="settings-export-field" style="font-size:12px;color:#555;">Minified JSON (copy this)</label>
         <textarea id="settings-export-field" readonly rows="3" style="font-family:monospace;font-size:11px;margin-top:4px;resize:vertical;"></textarea>
@@ -1141,6 +1153,56 @@ function toCSV(rows) {
   return lines.join('\n');
 }
 
+const ALL_TX_EXPECTED_HEADERS = ['account', 'date', 'description', 'amount', 'category', 'fix'];
+const ALL_TX_HEADER_MAP = { date: 1, description: 2, amount: 3, category: 4, fix: 5 };
+
+function toAllTransactionsCSV(rows = []) {
+  const escape = v => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const sorted = [...rows].sort((a, b) =>
+    (a.accountKey || '').localeCompare(b.accountKey || '') || (a.date || '').localeCompare(b.date || '')
+  );
+  const lines = ['Account,Date,Description,Amount,Category,Fix'];
+  for (const r of sorted) {
+    lines.push([
+      escape(r.accountKey),
+      escape(r.date),
+      escape(r.description),
+      escape(r.amount),
+      escape(r.category),
+      r.fix ? 'true' : 'false',
+    ].join(','));
+  }
+  return lines.join('\n');
+}
+
+function parseAllTransactionsCSV(raw) {
+  const rows = parseCSV(raw);
+  if (rows.length < 1) return { ok: false, errors: ['CSV must have at least one data row.'] };
+  const firstRowIsHeader = ALL_TX_EXPECTED_HEADERS.every((f, i) => (rows[0][i] || '').trim().toLowerCase() === f);
+  const dataRows = firstRowIsHeader ? rows.slice(1) : rows;
+  if (dataRows.length < 1) return { ok: false, errors: ['CSV must have at least one data row.'] };
+
+  const errors = [];
+  dataRows.forEach((fields, i) => {
+    const rowNum = i + 2;
+    const acct = (fields[0] || '').trim();
+    if (!acct) errors.push(`Row ${rowNum}: account is blank`);
+  });
+
+  const validation = validateImport(dataRows, ALL_TX_HEADER_MAP, true);
+  if (!validation.valid) errors.push(...validation.errors);
+  if (errors.length > 0) return { ok: false, errors };
+
+  const transactions = dataRows.map(fields => {
+    const accountKey = (fields[0] || '').trim();
+    return parseTransaction(fields, ALL_TX_HEADER_MAP, accountKey);
+  });
+  return { ok: true, transactions };
+}
+
 function fmtAmount(n) {
   const abs = Math.abs(n).toFixed(2);
   const sign = n < 0 ? '-' : '';
@@ -1315,6 +1377,68 @@ document.getElementById('load-copy-btn').addEventListener('click', () => {
   ta.select();
   document.execCommand('copy');
 });
+
+document.getElementById('load-export-all-btn').addEventListener('click', handleLoadExportAllCSV);
+document.getElementById('load-all-import-btn').addEventListener('click', handleLoadAllCSVImport);
+
+function handleLoadExportAllCSV() {
+  const csv = toAllTransactionsCSV(state.transactions);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'finance-tracker-transactions.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function handleLoadAllCSVImport() {
+  const fileInput = document.getElementById('load-all-file-input');
+  const statusEl = document.getElementById('load-all-status');
+  statusEl.style.display = 'none';
+  statusEl.innerHTML = '';
+
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) {
+    statusEl.className = 'alert alert-error';
+    statusEl.textContent = 'Please select a CSV file first.';
+    statusEl.style.display = 'block';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const raw = String(e.target.result || '');
+    const res = parseAllTransactionsCSV(raw);
+    if (!res.ok) {
+      statusEl.className = 'alert alert-error';
+      statusEl.innerHTML = `Import rejected:<ul style="margin-top:6px;padding-left:18px;">${
+        res.errors.map(err => `<li>${err}</li>`).join('')
+      }</ul>`;
+      statusEl.style.display = 'block';
+      return;
+    }
+
+    state.transactions = res.transactions;
+    const seen = new Set();
+    state.accounts = [];
+    state.transactions.forEach(t => {
+      if (t.accountKey && !seen.has(t.accountKey)) {
+        seen.add(t.accountKey);
+        state.accounts.push({ key: t.accountKey });
+      }
+    });
+    saveTransactions();
+    renderLoadSummary();
+    fileInput.value = '';
+    statusEl.className = 'alert alert-success';
+    statusEl.innerHTML = `Replaced all transactions with <strong>${res.transactions.length}</strong> row(s) across <strong>${state.accounts.length}</strong> account(s).`;
+    statusEl.style.display = 'block';
+  };
+  reader.readAsText(file);
+}
 
 // ══════════════════════════════════════════════════
 //  BUDGET VIEW
@@ -2122,7 +2246,6 @@ document.getElementById('settings-add-btn').addEventListener('click', () => show
 document.getElementById('sf-save-btn').addEventListener('click', saveAccountConfig);
 document.getElementById('sf-cancel-btn').addEventListener('click', hideAccountForm);
 document.getElementById('settings-export-btn').addEventListener('click', () => doExportSettings(false));
-document.getElementById('settings-export-all-btn').addEventListener('click', () => doExportSettings(true));
 document.getElementById('settings-import-btn').addEventListener('click', doImportSettings);
 
 function doExportSettings(includeTransactions = false) {
@@ -2760,7 +2883,7 @@ function importBackupJSON(jsonString) {
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, nextAccountFilter, filterBySearch, aggregateByCategory,
-  totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, mergeCategorizedSession, getMonthList,
+  totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, toAllTransactionsCSV, parseAllTransactionsCSV, mergeCategorizedSession, getMonthList,
   exportAccountsJSON, importAccountsJSON, exportBackupJSON, importBackupJSON, isValidLast4,
   normalizePayee, applyPayeeRules, discoverPayeeCandidates, mergePayeeRules, exportPayeeRulesJSON, importPayeeRulesJSON,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,

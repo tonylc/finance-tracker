@@ -65,6 +65,12 @@ Transactions are persisted to `localStorage` key `'financeTrackerTx'` as a JSON 
 
 Each account chip also has a **Clear** button (`.chip-clear-btn`) that calls `handleClearAccount(key)`. This filters both `state.transactions` and `state.accounts` to remove all entries for that account, calls `saveTransactions()` to update localStorage, then either hides `#load-summary` (if no transactions remain) or re-renders it.
 
+#### All-Transactions CSV Backup
+
+To support exporting and re-importing large transaction datasets without clipboard limits:
+- **Export All CSV (`#load-export-all-btn`):** Located in the header of the **Loaded Accounts** card (`#load-summary`). Clicking it calls `toAllTransactionsCSV(state.transactions)` — which sorts by `accountKey` ascending, then `date` ascending, and serializes rows with header `Account,Date,Description,Amount,Category,Fix` — and triggers a browser file download of `finance-tracker-transactions.csv` via a `Blob` object URL.
+- **Import All Transactions from CSV File (`#load-all-csv-card`):** Provides a file input (`#load-all-file-input`, `.csv`) and **Import CSV File (Replaces All)** button (`#load-all-import-btn`). Selecting a file and clicking import reads the file via `FileReader.readAsText`, validates and parses all rows via `parseAllTransactionsCSV(text)`, replaces `state.transactions` and `state.accounts` (no merge), persists to `localStorage`, and refreshes `#load-summary` and `#uncategorized-notice`.
+
 ---
 
 ### 2.2 Budget
@@ -285,11 +291,7 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
 
 #### Export Settings
 
-The Export Settings card provides two buttons:
-- **Export Settings** (`#settings-export-btn`): calls `exportBackupJSON({ accounts, payeeRules })`, omitting `transactions`.
-- **Export Settings + Transactions** (`#settings-export-all-btn`): calls `exportBackupJSON({ accounts, payeeRules, transactions })`, including all loaded transactions.
-
-The UI layer shows the minified JSON in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review. (`exportAccountsJSON(accounts)` is retained for accounts-only serialization.)
+Clicking **Export Settings** (`#settings-export-btn`) calls `exportBackupJSON({ accounts, payeeRules })`, serializing account profiles and payee auto-categorize rules without transactions. The UI layer shows the minified JSON in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review. (`exportAccountsJSON(accounts)` is retained for accounts-only serialization.)
 
 #### Import Settings
 
@@ -406,6 +408,8 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 |---|---|---|
 | `validateExport` | `(rows) → { valid, invalidRows: number[] }` | Returns valid=false and indices of rows with blank category. |
 | `toCSV` | `(rows) → string` | Serializes rows to CSV string with header `Date,Description,Amount,Category,Fix`. Quotes fields containing commas, quotes, or newlines. |
+| `toAllTransactionsCSV` | `(rows: Transaction[]) → string` | Sorts transactions by `accountKey` ascending then `date` ascending and serializes to CSV with header `Account,Date,Description,Amount,Category,Fix`. |
+| `parseAllTransactionsCSV` | `(raw: string) → { ok: true, transactions: Transaction[] } \| { ok: false, errors: string[] }` | Parses and validates an all-transactions CSV (`Account,Date,Description,Amount,Category,Fix`), returning normalized `Transaction` objects with `accountKey` populated from the `Account` column. |
 | `mergeCategorizedSession` | `(existing: Transaction[], catSession: Transaction[]) → { ok: true, transactions, accountKey } \| { ok: false, reason }` | Enforces the merge rule for appending a categorized session into the store. Returns `{ ok: false, reason: 'empty' }` if `catSession` is not a non-empty array, or `{ ok: false, reason: 'uncategorized', invalidRows }` if any row has a blank category (checked via `validateExport`). On success returns `{ ok: true, transactions: [...existing, ...catSession], accountKey: catSession[0].accountKey }`. Pure — does not mutate `existing`, touch the DOM, or persist. |
 
 ### Settings Import / Export

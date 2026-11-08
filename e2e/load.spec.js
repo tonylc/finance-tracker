@@ -109,3 +109,29 @@ test.describe('Transaction Persistence', () => {
     await expect(page.locator('#load-summary')).toBeHidden();
   });
 });
+
+test.describe('All-Transactions CSV Backup', () => {
+  test('uploading a 6-column CSV file replaces all existing transactions across accounts', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await loadTransactions(page, LOAD_CSV.simple);
+    await expect(page.locator('#total-tx-count')).toHaveText('3');
+
+    const allCsv = [
+      'Account,Date,Description,Amount,Category,Fix',
+      'Chase *1234,2026-02-01,Morning Coffee,-4.75,Coffee / Bakery,false',
+      'BofA *5678,2026-02-02,Supermarket,-62.10,Groceries,true',
+    ].join('\n');
+
+    await page.locator('#load-all-file-input').setInputFiles({
+      name: 'all-transactions.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(allCsv),
+    });
+    await page.click('#load-all-import-btn');
+
+    await expect(page.locator('#total-tx-count')).toHaveText('2');
+    await expect(page.locator('#accounts-list')).toContainText('Chase *1234');
+    await expect(page.locator('#accounts-list')).toContainText('BofA *5678');
+  });
+});
