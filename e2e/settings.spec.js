@@ -177,6 +177,32 @@ test.describe('Import Settings', () => {
     await expect(page.locator('#settings-import-error')).toBeVisible();
   });
 
+  test('importing a full backup with transactions replaces existing transactions and bootstraps Load and Budget views', async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.setItem('financeTrackerTx', JSON.stringify([
+        { id: 'old-1', accountKey: 'Old *0000', date: '2025-01-01', description: 'OLD TX', amount: -99, category: 'Misc', fix: false },
+      ]));
+    });
+    await page.reload();
+    await page.click('[data-view="settings"]');
+
+    const backup = JSON.stringify({
+      accounts: [{ id: 'imp-1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', 'amount'] }],
+      payeeRules: { 'Coffee / Bakery': ['STARBUCKS'] },
+      transactions: [
+        { id: 'new-1', accountKey: 'Chase *1234', date: '2026-02-01', description: 'STARBUCKS', amount: -6.25, category: 'Coffee / Bakery', fix: false },
+      ],
+    });
+    await page.fill('#settings-import-field', backup);
+    await page.click('#settings-import-btn');
+
+    await expect(page.locator('#settings-import-error')).toBeHidden();
+    await page.click('[data-view="load"]');
+    await expect(page.locator('#total-tx-count')).toHaveText('1');
+    await expect(page.locator('#accounts-list')).toContainText('Chase *1234');
+    await expect(page.locator('#accounts-list')).not.toContainText('Old *0000');
+  });
+
 });
 
 test.describe('Amount Sign Inversion', () => {

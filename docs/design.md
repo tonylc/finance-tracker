@@ -285,11 +285,11 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
 
 #### Export Settings
 
-`exportAccountsJSON(accounts)` serializes `state.userConfig.accounts` to a minified JSON string. The UI layer shows it in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review.
+`exportBackupJSON({ accounts, payeeRules, transactions })` serializes `state.userConfig.accounts`, `state.userConfig.payeeRules`, and `state.transactions` into a single minified JSON string. The UI layer shows it in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review. (`exportAccountsJSON(accounts)` is retained for accounts-only serialization.)
 
 #### Import Settings
 
-`importAccountsJSON(jsonString)` parses and validates the string (see §4). On success the UI replaces `state.userConfig.accounts`, assigns any missing `id` values via `crypto.randomUUID()`, calls `saveConfig()`, and re-renders the account table. Validation errors appear inline in `#settings-import-error` if the JSON is malformed or any account has an invalid `last4`.
+`importBackupJSON(jsonString)` parses and validates either a full backup object (`{ accounts, payeeRules?, transactions? }`) or a legacy top-level array of account profiles (`[...]`). On success the UI replaces `state.userConfig.accounts` (assigning any missing `id` values via `crypto.randomUUID()`), replaces `state.userConfig.payeeRules` if `payeeRules` was included, and if `transactions` was included, replaces `state.transactions` (no merge), reconstructs `state.accounts` from unique `accountKey`s, persists to `localStorage`, and refreshes the Load summary. Validation errors appear inline in `#settings-import-error`.
 
 #### Account Type
 
@@ -411,6 +411,8 @@ All pure functions are exposed on `window.__financeLib` for testing in `tests.ht
 | `isValidLast4` | `(val: unknown) → boolean` | Returns `true` iff `val` is a string matching `/^\d{4}$/` (exactly 4 ASCII digits). Used by both `importAccountsJSON` and the settings form (`saveAccountConfig`) as the single source of truth for last4 validation. |
 | `exportAccountsJSON` | `(accounts: AccountProfile[]) → string` | Returns a minified (no newlines) JSON string of the accounts array. |
 | `importAccountsJSON` | `(jsonString: string) → { ok: true, accounts: AccountProfile[] } \| { ok: false, error: string }` | Parses and validates a JSON blob. Requires top-level array; each element must have `name` (string), `last4` (passes `isValidLast4`), and `inputCsvFormat` (array). Returns `{ ok: false, error }` on malformed JSON, non-array input, or any account failing validation. Missing `id` values are assigned by the UI caller. |
+| `exportBackupJSON` | `(data: { accounts?, payeeRules?, transactions? }) → string` | Serializes accounts, sorted payeeRules, and transactions into a single minified JSON backup string. |
+| `importBackupJSON` | `(jsonString: string) → { ok: true, data: { accounts, payeeRules?, transactions? } } \| { ok: false, error: string }` | Overloaded settings/backup importer: accepts either a legacy array of accounts or a backup object `{ accounts, payeeRules?, transactions? }`. Validates all present collections. |
 
 ### Payee Auto-Categorization
 

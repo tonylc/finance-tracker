@@ -86,7 +86,7 @@ function runTests() {
     parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount,
     aggregateByCategory, totalSpend, cycleCategoryByKey, nextAccountFilter,
     validateExport, toCSV, mergeCategorizedSession, getMonthList, sortByDateDesc, sortByDateAsc, filterBySearch,
-    exportAccountsJSON, importAccountsJSON, isValidLast4, ALL_SUBS, VALID_CATS,
+    exportAccountsJSON, importAccountsJSON, exportBackupJSON, importBackupJSON, isValidLast4, ALL_SUBS, VALID_CATS,
     normalizePayee, applyPayeeRules, discoverPayeeCandidates, mergePayeeRules, exportPayeeRulesJSON, importPayeeRulesJSON,
   } = lib;
 
@@ -1218,6 +1218,63 @@ function runTests() {
       assertEqual(importPayeeRulesJSON('[]').ok, false);
       assertEqual(importPayeeRulesJSON(JSON.stringify({ 'InvalidCat': ['FOO'] })).ok, false);
       assertEqual(importPayeeRulesJSON(JSON.stringify({ 'Restaurants': ['[unclosed'] })).ok, false);
+    });
+  });
+
+  // ── exportBackupJSON ──────────────────────────────────────────────────────
+  suite('exportBackupJSON', () => {
+    test('given accounts, payeeRules, and transactions, returns minified JSON object', () => {
+      const json = exportBackupJSON({
+        accounts: [{ id: 'a1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', 'amount'] }],
+        payeeRules: { 'Coffee / Bakery': ['STARBUCKS'] },
+        transactions: [{ id: 't1', accountKey: 'Chase *1234', date: '2026-01-10', description: 'STARBUCKS', amount: -5.5, category: 'Coffee / Bakery', fix: false }],
+      });
+      assert(!json.includes('\n'), 'minified JSON has no newlines');
+      const parsed = JSON.parse(json);
+      assertEqual(parsed.accounts.length, 1);
+      assertEqual(parsed.payeeRules['Coffee / Bakery'], ['STARBUCKS']);
+      assertEqual(parsed.transactions.length, 1);
+    });
+  });
+
+  // ── importBackupJSON ──────────────────────────────────────────────────────
+  suite('importBackupJSON', () => {
+    const validAccount = { id: 'a1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', 'amount'] };
+    const validTx = { id: 't1', accountKey: 'Chase *1234', date: '2026-01-10', description: 'STARBUCKS', amount: -5.5, category: 'Coffee / Bakery', fix: false };
+
+    test('given legacy JSON array of accounts, returns ok:true with accounts and undefined transactions', () => {
+      const res = importBackupJSON(JSON.stringify([validAccount]));
+      assertEqual(res.ok, true);
+      assertEqual(res.data.accounts.length, 1);
+      assertEqual(res.data.transactions, undefined);
+    });
+
+    test('given backup object with accounts, payeeRules, and transactions, returns all validated collections', () => {
+      const raw = JSON.stringify({
+        accounts: [validAccount],
+        payeeRules: { 'Coffee / Bakery': ['STARBUCKS'] },
+        transactions: [validTx],
+      });
+      const res = importBackupJSON(raw);
+      assertEqual(res.ok, true);
+      assertEqual(res.data.accounts.length, 1);
+      assertEqual(res.data.payeeRules['Coffee / Bakery'], ['STARBUCKS']);
+      assertEqual(res.data.transactions.length, 1);
+      assertEqual(res.data.transactions[0].accountKey, 'Chase *1234');
+    });
+
+    test('given backup object without optional transactions, succeeds with transactions undefined', () => {
+      const res = importBackupJSON(JSON.stringify({ accounts: [validAccount] }));
+      assertEqual(res.ok, true);
+      assertEqual(res.data.accounts.length, 1);
+      assertEqual(res.data.transactions, undefined);
+    });
+
+    test('rejects invalid transaction fields in backup object', () => {
+      const badAmt = JSON.stringify({ accounts: [validAccount], transactions: [{ ...validTx, amount: 'bad' }] });
+      const badCat = JSON.stringify({ accounts: [validAccount], transactions: [{ ...validTx, category: 'NotACategory' }] });
+      assertEqual(importBackupJSON(badAmt).ok, false);
+      assertEqual(importBackupJSON(badCat).ok, false);
     });
   });
 

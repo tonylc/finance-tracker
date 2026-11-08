@@ -2122,7 +2122,11 @@ document.getElementById('settings-export-btn').addEventListener('click', doExpor
 document.getElementById('settings-import-btn').addEventListener('click', doImportSettings);
 
 function doExportSettings() {
-  const json = exportAccountsJSON(state.userConfig.accounts);
+  const json = exportBackupJSON({
+    accounts: state.userConfig.accounts,
+    payeeRules: state.userConfig.payeeRules,
+    transactions: state.transactions,
+  });
   document.getElementById('settings-export-field').value = json;
   document.getElementById('settings-export-pretty').textContent = JSON.stringify(JSON.parse(json), null, 2);
   document.getElementById('settings-export-section').style.display = 'block';
@@ -2131,20 +2135,43 @@ function doExportSettings() {
 function doImportSettings() {
   const raw = document.getElementById('settings-import-field').value.trim();
   const errEl = document.getElementById('settings-import-error');
-  const result = importAccountsJSON(raw);
+  const result = importBackupJSON(raw);
   if (!result.ok) {
     errEl.textContent = result.error;
     errEl.style.display = 'block';
     document.getElementById('settings-import-section').style.display = 'none';
     return;
   }
-  result.accounts.forEach(a => { if (!a.id) a.id = crypto.randomUUID(); });
-  state.userConfig.accounts = result.accounts;
+  result.data.accounts.forEach(a => { if (!a.id) a.id = crypto.randomUUID(); });
+  state.userConfig.accounts = result.data.accounts;
+  if (result.data.payeeRules !== undefined) {
+    state.userConfig.payeeRules = result.data.payeeRules;
+    renderPayeeRules();
+  }
   saveConfig();
   populateAccountDropdowns();
   renderSettingsTable();
+
+  if (result.data.transactions !== undefined) {
+    state.transactions = result.data.transactions;
+    const seen = new Set();
+    state.accounts = [];
+    state.transactions.forEach(t => {
+      if (t.accountKey && !seen.has(t.accountKey)) {
+        seen.add(t.accountKey);
+        state.accounts.push({ key: t.accountKey });
+      }
+    });
+    saveTransactions();
+    if (state.transactions.length > 0) {
+      renderLoadSummary();
+    } else {
+      document.getElementById('load-summary').style.display = 'none';
+    }
+  }
+
   errEl.style.display = 'none';
-  document.getElementById('settings-import-pretty').textContent = JSON.stringify(result.accounts, null, 2);
+  document.getElementById('settings-import-pretty').textContent = JSON.stringify(result.data, null, 2);
   document.getElementById('settings-import-section').style.display = 'block';
 }
 
@@ -2638,11 +2665,93 @@ function importPayeeRulesJSON(jsonString) {
   return { ok: true, rules: mergePayeeRules(parsed, []) };
 }
 
+function exportBackupJSON(data = {}) {
+  return JSON.stringify({
+    accounts: Array.isArray(data.accounts) ? data.accounts : [],
+    payeeRules: mergePayeeRules(data.payeeRules || {}, []),
+    transactions: Array.isArray(data.transactions) ? data.transactions : [],
+  });
+}
+
+function importBackupJSON(jsonString) {
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonString);
+  } catch (e) {
+    return { ok: false, error: 'Invalid JSON: ' + e.message };
+  }
+
+  // Overloaded: support legacy top-level array of account profiles
+  if (Array.isArray(parsed)) {
+    const acctRes = importAccountsJSON(jsonString);
+    if (!acctRes.ok) return acctRes;
+    return { ok: true, data: { accounts: acctRes.accounts } };
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'Expected a JSON backup object or an array of accounts.' };
+  }
+
+  if (!Array.isArray(parsed.accounts)) {
+    return { ok: false, error: 'Backup is missing a valid "accounts" array.' };
+  }
+  const acctRes = importAccountsJSON(JSON.stringify(parsed.accounts));
+  if (!acctRes.ok) return acctRes;
+  const data = { accounts: acctRes.accounts };
+
+  if (parsed.payeeRules !== undefined) {
+    const rulesRes = importPayeeRulesJSON(JSON.stringify(parsed.payeeRules));
+    if (!rulesRes.ok) return rulesRes;
+    data.payeeRules = rulesRes.rules;
+  }
+
+  if (parsed.transactions !== undefined) {
+    if (!Array.isArray(parsed.transactions)) {
+      return { ok: false, error: 'Backup "transactions" must be an array.' };
+    }
+    const transactions = [];
+    for (let i = 0; i < parsed.transactions.length; i++) {
+      const t = parsed.transactions[i];
+      if (!t || typeof t !== 'object') {
+        return { ok: false, error: `Transaction at index ${i} must be an object.` };
+      }
+      if (typeof t.accountKey !== 'string' || !t.accountKey.trim()) {
+        return { ok: false, error: `Transaction at index ${i} is missing a valid "accountKey".` };
+      }
+      if (typeof t.date !== 'string' || !t.date.trim() || isNaN(new Date(t.date).getTime())) {
+        return { ok: false, error: `Transaction at index ${i} is missing a valid "date".` };
+      }
+      if (typeof t.description !== 'string' || !t.description.trim()) {
+        return { ok: false, error: `Transaction at index ${i} is missing a valid "description".` };
+      }
+      if (typeof t.amount !== 'number' || !isFinite(t.amount)) {
+        return { ok: false, error: `Transaction at index ${i} is missing a finite numeric "amount".` };
+      }
+      const cat = typeof t.category === 'string' ? t.category.trim() : '';
+      if (cat && !VALID_CATS.has(cat)) {
+        return { ok: false, error: `Transaction at index ${i} has invalid category "${cat}".` };
+      }
+      transactions.push({
+        id: (typeof t.id === 'string' && t.id.trim()) ? t.id : crypto.randomUUID(),
+        accountKey: t.accountKey.trim(),
+        date: t.date.trim(),
+        description: t.description.trim(),
+        amount: t.amount,
+        category: cat,
+        fix: Boolean(t.fix),
+      });
+    }
+    data.transactions = transactions;
+  }
+
+  return { ok: true, data };
+}
+
 window.__financeLib = {
   parseCSV, parseCSVLine, formatAccountKey, validateImport, buildHeaderMap,
   parseTransaction, deduplicateTransactions, filterByMonth, filterByDateRange, filterByAccount, nextAccountFilter, filterBySearch, aggregateByCategory,
   totalSpend, sortByDateDesc, sortByDateAsc, cycleCategoryByKey, validateExport, toCSV, mergeCategorizedSession, getMonthList,
-  exportAccountsJSON, importAccountsJSON, isValidLast4,
+  exportAccountsJSON, importAccountsJSON, exportBackupJSON, importBackupJSON, isValidLast4,
   normalizePayee, applyPayeeRules, discoverPayeeCandidates, mergePayeeRules, exportPayeeRulesJSON, importPayeeRulesJSON,
   CAT_LIST, ALL_SUBS, VALID_CATS, SUB_TO_PARENT,
 };
