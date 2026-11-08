@@ -1223,7 +1223,18 @@ function runTests() {
 
   // ── exportBackupJSON ──────────────────────────────────────────────────────
   suite('exportBackupJSON', () => {
-    test('given accounts, payeeRules, and transactions, returns minified JSON object', () => {
+    test('given accounts and payeeRules without transactions, omits transactions key', () => {
+      const json = exportBackupJSON({
+        accounts: [{ id: 'a1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', 'amount'] }],
+        payeeRules: { 'Coffee / Bakery': ['STARBUCKS'] },
+      });
+      const parsed = JSON.parse(json);
+      assertEqual(parsed.accounts.length, 1);
+      assertEqual(parsed.payeeRules['Coffee / Bakery'], ['STARBUCKS']);
+      assertEqual(parsed.transactions, undefined);
+    });
+
+    test('given accounts, payeeRules, and transactions, includes transactions array in minified JSON', () => {
       const json = exportBackupJSON({
         accounts: [{ id: 'a1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', 'amount'] }],
         payeeRules: { 'Coffee / Bakery': ['STARBUCKS'] },

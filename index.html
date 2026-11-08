@@ -641,8 +641,11 @@
     <!-- Export Settings -->
     <div class="card">
       <h3 style="margin:0 0 12px;">Export Settings</h3>
-      <p style="font-size:12px;color:#777;margin-bottom:10px;">Copy the minified JSON below and save it somewhere safe to restore your account configurations in another browser.</p>
-      <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
+      <p style="font-size:12px;color:#777;margin-bottom:10px;">Copy the minified JSON below and save it somewhere safe to restore your account configurations (or full backup including transactions) in another browser.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" id="settings-export-btn">Export Settings</button>
+        <button class="btn btn-secondary btn-sm" id="settings-export-all-btn">Export Settings + Transactions</button>
+      </div>
       <div id="settings-export-section" style="display:none;margin-top:12px;">
         <label for="settings-export-field" style="font-size:12px;color:#555;">Minified JSON (copy this)</label>
         <textarea id="settings-export-field" readonly rows="3" style="font-family:monospace;font-size:11px;margin-top:4px;resize:vertical;"></textarea>
@@ -2118,15 +2121,19 @@ document.getElementById('settings-add-btn').addEventListener('click', () => show
 
 document.getElementById('sf-save-btn').addEventListener('click', saveAccountConfig);
 document.getElementById('sf-cancel-btn').addEventListener('click', hideAccountForm);
-document.getElementById('settings-export-btn').addEventListener('click', doExportSettings);
+document.getElementById('settings-export-btn').addEventListener('click', () => doExportSettings(false));
+document.getElementById('settings-export-all-btn').addEventListener('click', () => doExportSettings(true));
 document.getElementById('settings-import-btn').addEventListener('click', doImportSettings);
 
-function doExportSettings() {
-  const json = exportBackupJSON({
+function doExportSettings(includeTransactions = false) {
+  const payload = {
     accounts: state.userConfig.accounts,
     payeeRules: state.userConfig.payeeRules,
-    transactions: state.transactions,
-  });
+  };
+  if (includeTransactions) {
+    payload.transactions = state.transactions;
+  }
+  const json = exportBackupJSON(payload);
   document.getElementById('settings-export-field').value = json;
   document.getElementById('settings-export-pretty').textContent = JSON.stringify(JSON.parse(json), null, 2);
   document.getElementById('settings-export-section').style.display = 'block';
@@ -2666,11 +2673,14 @@ function importPayeeRulesJSON(jsonString) {
 }
 
 function exportBackupJSON(data = {}) {
-  return JSON.stringify({
+  const out = {
     accounts: Array.isArray(data.accounts) ? data.accounts : [],
     payeeRules: mergePayeeRules(data.payeeRules || {}, []),
-    transactions: Array.isArray(data.transactions) ? data.transactions : [],
-  });
+  };
+  if (data.transactions !== undefined) {
+    out.transactions = Array.isArray(data.transactions) ? data.transactions : [];
+  }
+  return JSON.stringify(out);
 }
 
 function importBackupJSON(jsonString) {

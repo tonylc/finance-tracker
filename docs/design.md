@@ -285,7 +285,11 @@ Clicking **Delete** calls `deleteAccountConfig(id)`, which removes the account f
 
 #### Export Settings
 
-`exportBackupJSON({ accounts, payeeRules, transactions })` serializes `state.userConfig.accounts`, `state.userConfig.payeeRules`, and `state.transactions` into a single minified JSON string. The UI layer shows it in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review. (`exportAccountsJSON(accounts)` is retained for accounts-only serialization.)
+The Export Settings card provides two buttons:
+- **Export Settings** (`#settings-export-btn`): calls `exportBackupJSON({ accounts, payeeRules })`, omitting `transactions`.
+- **Export Settings + Transactions** (`#settings-export-all-btn`): calls `exportBackupJSON({ accounts, payeeRules, transactions })`, including all loaded transactions.
+
+The UI layer shows the minified JSON in `#settings-export-field` (for copy) and pretty-prints it in `#settings-export-pretty` for review. (`exportAccountsJSON(accounts)` is retained for accounts-only serialization.)
 
 #### Import Settings
 

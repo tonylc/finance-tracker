@@ -149,6 +149,28 @@ test.describe('Export Settings', () => {
     expect(json).toContain('Chase');
     expect(json).toContain('1234');
   });
+
+  test('Export Settings omits transactions while Export Settings + Transactions includes them', async ({ page }) => {
+    await seedAccounts(page);
+    await page.goto('index.html');
+    await page.evaluate(() => {
+      localStorage.setItem('financeTrackerTx', JSON.stringify([
+        { id: 't1', accountKey: 'Chase *1234', date: '2026-01-10', description: 'COFFEE', amount: -5, category: 'Coffee / Bakery', fix: false },
+      ]));
+    });
+    await page.reload();
+    await page.click('[data-view="settings"]');
+
+    await page.click('#settings-export-btn');
+    const settingsOnly = JSON.parse(await page.locator('#settings-export-field').inputValue());
+    expect(settingsOnly.accounts).toHaveLength(1);
+    expect(settingsOnly.transactions).toBeUndefined();
+
+    await page.click('#settings-export-all-btn');
+    const fullExport = JSON.parse(await page.locator('#settings-export-field').inputValue());
+    expect(fullExport.accounts).toHaveLength(1);
+    expect(fullExport.transactions).toHaveLength(1);
+  });
 });
 
 test.describe('Import Settings', () => {
@@ -201,6 +223,27 @@ test.describe('Import Settings', () => {
     await expect(page.locator('#total-tx-count')).toHaveText('1');
     await expect(page.locator('#accounts-list')).toContainText('Chase *1234');
     await expect(page.locator('#accounts-list')).not.toContainText('Old *0000');
+  });
+
+  test('importing settings without transactions preserves existing transactions', async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.setItem('financeTrackerTx', JSON.stringify([
+        { id: 'keep-1', accountKey: 'Existing *0000', date: '2025-01-01', description: 'KEEP ME', amount: -42, category: 'Misc', fix: false },
+      ]));
+    });
+    await page.reload();
+    await page.click('[data-view="settings"]');
+
+    const settingsOnly = JSON.stringify({
+      accounts: [{ id: 'imp-1', name: 'Chase', last4: '1234', type: 'credit', inputCsvFormat: ['date', 'description', 'amount'] }],
+      payeeRules: { 'Coffee / Bakery': ['STARBUCKS'] },
+    });
+    await page.fill('#settings-import-field', settingsOnly);
+    await page.click('#settings-import-btn');
+
+    await page.click('[data-view="load"]');
+    await expect(page.locator('#total-tx-count')).toHaveText('1');
+    await expect(page.locator('#accounts-list')).toContainText('Existing *0000');
   });
 
 });
