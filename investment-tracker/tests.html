@@ -787,6 +787,17 @@ function runTests() {
       assertEqual(res.ok, true);
       assertEqual(res.data.networthSnapshots[0].accounts['Vanguard *1234'], { value: 15000, costBasis: 0 });
     });
+
+    test('given legacy snapshot missing totalCostBasis or accounts, defaults them to 0 and {}', () => {
+      const legacy = {
+        ...validBackup,
+        networthSnapshots: [{ id: 's1', date: '2026-01-01', totalValue: 15000 }],
+      };
+      const res = importBackupJSON(JSON.stringify(legacy));
+      assertEqual(res.ok, true);
+      assertEqual(res.data.networthSnapshots[0].totalCostBasis, 0);
+      assertEqual(res.data.networthSnapshots[0].accounts, {});
+    });
   });
 
   renderResults();

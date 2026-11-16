@@ -885,7 +885,7 @@ function importBackupJSON(jsonString) {
     if (typeof h.ticker !== 'string' || !h.ticker.trim()) return { ok: false, error: `Holding at index ${i} is missing a valid "ticker".` };
     if (typeof h.shares !== 'number' || !isFinite(h.shares) || h.shares <= 0) return { ok: false, error: `Holding at index ${i}: "shares" must be a positive number.` };
     const costBasis = h.costBasis == null ? 0 : h.costBasis;
-    if (typeof costBasis !== 'number' || !isFinite(costBasis) || costBasis < 0) return { ok: false, error: `Holding at index ${i}: "costBasis" must be a non-negative number.` };
+    if (typeof costBasis !== 'number' || !isFinite(costBasis)) return { ok: false, error: `Holding at index ${i}: "costBasis" must be a finite number.` };
     holdings.push({
       id: h.id || crypto.randomUUID(),
       accountKey: h.accountKey,
@@ -905,6 +905,7 @@ function importBackupJSON(jsonString) {
     if (!cp.prices || typeof cp.prices !== 'object' || Array.isArray(cp.prices)) return { ok: false, error: '"currentPrices.prices" must be an object.' };
     const prices = {};
     for (const [ticker, price] of Object.entries(cp.prices)) {
+      if (price == null) continue;
       if (typeof price !== 'number' || !isFinite(price) || price <= 0) {
         return { ok: false, error: `Price for "${ticker}" must be a positive number.` };
       }
@@ -923,9 +924,11 @@ function importBackupJSON(jsonString) {
     if (!s || typeof s !== 'object') return { ok: false, error: `Snapshot at index ${i} must be an object.` };
     if (typeof s.date !== 'string' || !s.date.trim()) return { ok: false, error: `Snapshot at index ${i} is missing a valid "date".` };
     if (typeof s.totalValue !== 'number' || !isFinite(s.totalValue)) return { ok: false, error: `Snapshot at index ${i}: "totalValue" must be a finite number.` };
-    if (typeof s.totalCostBasis !== 'number' || !isFinite(s.totalCostBasis)) return { ok: false, error: `Snapshot at index ${i}: "totalCostBasis" must be a finite number.` };
-    if (!s.accounts || typeof s.accounts !== 'object' || Array.isArray(s.accounts)) return { ok: false, error: `Snapshot at index ${i} is missing a valid "accounts" object.` };
-    rawSnapshots.push({ ...s, id: s.id || crypto.randomUUID() });
+    const totalCostBasis = s.totalCostBasis == null ? 0 : s.totalCostBasis;
+    if (typeof totalCostBasis !== 'number' || !isFinite(totalCostBasis)) return { ok: false, error: `Snapshot at index ${i}: "totalCostBasis" must be a finite number.` };
+    const snapAccounts = s.accounts == null ? {} : s.accounts;
+    if (typeof snapAccounts !== 'object' || Array.isArray(snapAccounts)) return { ok: false, error: `Snapshot at index ${i} is missing a valid "accounts" object.` };
+    rawSnapshots.push({ ...s, id: s.id || crypto.randomUUID(), totalCostBasis, accounts: snapAccounts });
   }
   const { snapshots: networthSnapshots } = migrateSnapshots(rawSnapshots);
 
@@ -1714,6 +1717,18 @@ document.getElementById('settings-import-btn').addEventListener('click', () => {
   errEl.style.display = 'none';
   okEl.style.display  = 'none';
   if (!raw) { showError(errEl, 'Paste a JSON backup first.'); return; }
+  if (raw.startsWith('[')) {
+    const acctRes = importAccountsJSON(raw);
+    if (!acctRes.ok) { showError(errEl, acctRes.error); return; }
+    state.userConfig.accounts = acctRes.accounts.map(a => ({ ...a, id: a.id || crypto.randomUUID() }));
+    saveConfig();
+    document.getElementById('settings-import-field').value = '';
+    okEl.textContent = `Imported ${state.userConfig.accounts.length} account(s).`;
+    okEl.style.display = '';
+    renderSettingsView();
+    renderUploadView();
+    return;
+  }
   const result = importBackupJSON(raw);
   if (!result.ok) { showError(errEl, result.error); return; }
   state.userConfig.accounts = result.data.accounts;
